@@ -994,13 +994,21 @@
       const user = world(state.userRef.x, state.userRef.y, 0);
       let eye, target, up = [0, 1, 0];
       if (state.cameraView === "overhead") {
-        eye = [0, 52, 0];
+        const aspect = context.canvas.width / context.canvas.height;
+        const portrait = aspect < 1;
+        const rinkWidth = (RINK.right - RINK.left) * .05;
+        const rinkDepth = (RINK.bottom - RINK.top) * .05;
+        const verticalExtent = portrait
+          ? Math.max(rinkWidth, rinkDepth / aspect)
+          : Math.max(rinkDepth, rinkWidth / aspect);
+        const cameraHeight = verticalExtent / (2 * Math.tan(Math.PI / 6.4)) * 1.12;
+        eye = [0, cameraHeight, 0];
         target = [0, 0, 0];
-        up = [0, 0, -1];
+        up = portrait ? [1, 0, 0] : [0, 0, -1];
       } else {
         const fx = Math.sin(state.camera.yaw), fz = Math.cos(state.camera.yaw);
-        eye = [user[0] - fx * 14, 6, user[2] - fz * 14];
-        target = [user[0] + fx * 5, .5, user[2] + fz * 5];
+        eye = [user[0] - fx * 26, 9, user[2] - fz * 26];
+        target = [user[0] + fx * 7, .5, user[2] + fz * 7];
       }
       const view = lookAt(eye, target, up);
       const projection = perspective(Math.PI / 3.2, context.canvas.width / context.canvas.height, .1, 140);
