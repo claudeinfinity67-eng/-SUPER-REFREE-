@@ -46,7 +46,7 @@
     refs: [],
     userRef: null,
     camera: { x: 700, y: 360, yaw: Math.PI / 2 },
-    cameraView: "chase",
+    cameraView: "overhead",
     score: [0, 0],
     period: 1,
     attackToRight: true,
@@ -994,7 +994,7 @@
       const user = world(state.userRef.x, state.userRef.y, 0);
       let eye, target, up = [0, 1, 0];
       if (state.cameraView === "overhead") {
-        eye = [0, 73, 22];
+        eye = [0, 52, 0];
         target = [0, 0, 0];
         up = [0, 0, -1];
       } else {
