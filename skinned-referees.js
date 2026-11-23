@@ -1,6 +1,5 @@
 import * as THREE from "https://esm.sh/three@0.180.0";
-import { FBXLoader } from "https://esm.sh/three@0.180.0/examples/jsm/loaders/FBXLoader.js";
-import { clone as cloneSkinnedObject } from "https://esm.sh/three@0.180.0/examples/jsm/utils/SkeletonUtils.js";
+import { OBJLoader } from "https://esm.sh/three@0.180.0/examples/jsm/loaders/OBJLoader.js";
 
 const canvas = document.querySelector("#skinned-referees");
 const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
@@ -10,9 +9,12 @@ renderer.outputColorSpace = THREE.SRGBColorSpace;
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(Math.PI / 3.2, 1, 0.1, 140);
 const clock = new THREE.Clock();
+scene.add(new THREE.HemisphereLight(0xdff8ff, 0x1d2a32, 2.2));
+const keyLight = new THREE.DirectionalLight(0xffffff, 2.4);
+keyLight.position.set(-4, 8, 6);
+scene.add(keyLight);
 const refs = [];
 let baseTemplate = null;
-let baseClip = null;
 let loaded = false;
 
 function materialize() {
@@ -27,12 +29,10 @@ const refereeTexture = textureLoader.load("assets/referee-model/texture_diffuse.
 refereeTexture.colorSpace = THREE.SRGBColorSpace;
 refereeTexture.flipY = false;
 
-new FBXLoader().load(
-  "assets/referee-model/Patinage.fbx",
+new OBJLoader().load(
+  "assets/referee-model/base.obj",
   (object) => {
     baseTemplate = object;
-    baseClip = object.animations[0] || null;
-    object.scale.setScalar(0.01);
     object.updateMatrixWorld(true);
     object.traverse((child) => {
       if (!child.isMesh) return;
@@ -51,19 +51,13 @@ new FBXLoader().load(
     window.skinnedReferees.ready = true;
   },
   undefined,
-  (error) => console.error("Impossible de charger l'animation FBX :", error),
+  (error) => console.error("Impossible de charger le modèle 3D de l'arbitre :", error),
 );
 
 function makeRef(index) {
   if (!baseTemplate) return null;
-  const object = cloneSkinnedObject(baseTemplate);
-  const mixer = baseClip ? new THREE.AnimationMixer(object) : null;
-  const action = mixer ? mixer.clipAction(baseClip) : null;
-  if (action) {
-    action.reset();
-    action.play();
-  }
-  object.userData.mixer = mixer;
+  const object = baseTemplate.clone(true);
+  object.userData.refIndex = index;
   scene.add(object);
   refs[index] = object;
   return object;
@@ -83,9 +77,10 @@ function syncRef(index, entity, assistant = false) {
   object.rotation.y = (entity.yaw || 0) - Math.PI / 2;
 
   const speed = Math.hypot(entity.vx || 0, entity.vy || 0);
-  if (object.userData.mixer) {
-    object.userData.mixer.timeScale = 0.65 + Math.min(1, speed / 90) * 1.35;
-  }
+  const skating = Math.min(1, speed / 90);
+  const phase = performance.now() * 0.008 * (0.7 + skating) + object.userData.refIndex * Math.PI;
+  object.position.y = skating > 0.05 ? Math.abs(Math.sin(phase * 2)) * 0.025 : 0;
+  object.rotation.z = Math.sin(phase) * 0.025 * skating;
   object.visible = true;
   return true;
 }
@@ -139,6 +134,6 @@ resize();
 renderer.setAnimationLoop(() => {
   if (!loaded) return;
   const delta = Math.min(clock.getDelta(), 0.05);
-  refs.forEach((object) => object?.userData.mixer?.update(delta));
+  void delta;
   renderer.render(scene, camera);
 });
