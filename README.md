@@ -12,6 +12,8 @@ Jeu de hockey sur glace en **3D WebGL** jouable dans un navigateur. La caméra s
 
 La patinoire et les personnages sont rendus en WebGL sans bibliothèque 3D externe. Les joueurs des deux équipes patinent et jouent le palet de façon autonome. L'arbitre assistant suit l'action. Le match comprend trois périodes accélérées, les buts, les arrêts du gardien, les hors-jeu, les dégagements interdits, des pénalités temporaires et l'évaluation des décisions. La précision et les points d'expérience sont conservés dans le stockage local du navigateur.
 
+Les fichiers source du modèle d'arbitre (`assets/referee-model/`) sont conservés dans le dépôt, mais ne sont pas chargés par le jeu. Le rendu utilise les personnages WebGL intégrés pour éviter les problèmes de taille et de cadrage du modèle externe.
+
 ### Deux infractions différentes
 
 - **Hors-jeu** : un attaquant franchit la ligne bleue de la zone offensive avant le palet.
