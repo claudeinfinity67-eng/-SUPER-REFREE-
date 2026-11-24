@@ -28,6 +28,7 @@ let playerMaterials = [];
 let playersLoaded = false;
 const refereeHeight = 1.6;
 const playerHeight = 1.72;
+const playerModelYawOffset = -Math.PI / 2;
 const animationFadeSpeed = 12;
 
 const shadowCanvas = document.createElement("canvas");
@@ -309,7 +310,9 @@ function syncPlayer(entity, delta) {
 
   const targetX = (entity.x - 700) * 0.05;
   const targetZ = (entity.y - 360) * 0.05;
-  const targetYaw = entity.yaw ?? 0;
+  const speed = Math.hypot(entity.vx || 0, entity.vy || 0);
+  const movementYaw = speed > 3 ? Math.atan2(entity.vx, entity.vy) : entity.yaw ?? 0;
+  const targetYaw = movementYaw + playerModelYawOffset;
   if (!object.userData.hasSynced) {
     object.position.set(targetX, object.position.y, targetZ);
     object.rotation.y = targetYaw;
@@ -326,7 +329,6 @@ function syncPlayer(entity, delta) {
   }
   object.visible = true;
 
-  const speed = Math.hypot(entity.vx || 0, entity.vy || 0);
   const action = object.userData.action;
   if (action) {
     const moving = speed > 3;
