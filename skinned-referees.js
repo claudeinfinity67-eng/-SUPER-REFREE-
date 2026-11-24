@@ -8,7 +8,8 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(Math.PI / 3.2, 1, 0.1, 140);
+// Three.js expects field of view in degrees; the rink renderer uses radians.
+const camera = new THREE.PerspectiveCamera(56.25, 1, 0.1, 140);
 const clock = new THREE.Clock();
 scene.add(new THREE.HemisphereLight(0xeaffff, 0x263945, 2));
 const keyLight = new THREE.DirectionalLight(0xffffff, 2.2);
