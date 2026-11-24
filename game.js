@@ -933,9 +933,12 @@
         window.skinnedReferees.sync({ eye, target, up }, {
           userRef: state.userRef,
           assistantRef: state.refs[1],
+          players: state.players,
         });
       }
-      state.players.forEach(player => drawHockeyPlayer(player, seconds));
+      if (!window.skinnedReferees?.playersReady) {
+        state.players.forEach(player => drawHockeyPlayer(player, seconds));
+      }
       if (!window.skinnedReferees?.ready) {
         drawHockeyPlayer(state.refs[1], seconds, true, true);
         drawHockeyPlayer(state.userRef, seconds, true, false);
