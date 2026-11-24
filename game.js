@@ -1141,20 +1141,20 @@
       return;
     }
     if (isEditable(event.target)) return;
+    if (!event.repeat && (key === "i" || key === "o") && !ui.settings.open) {
+      state.camera.distanceOffset = clamp(state.camera.distanceOffset + (key === "i" ? -2 : 2), -20, 32);
+      const baseDistance = canvas.width / canvas.height < 1 ? 28 : 32;
+      const distance = Math.round(clamp(baseDistance + state.camera.distanceOffset, 8, 60));
+      toast(`Caméra ${key === "i" ? "rapprochée" : "éloignée"} · ${distance} m`);
+      event.preventDefault();
+      return;
+    }
     if (ui.whistleDialog.open) {
       if (!event.repeat && ["1","2","3","4","5","0"].includes(key)) {
         const map = { "1":"offside", "2":"icing", "3":"penalty", "4":"goal", "5":"no-goal", "0":"play-on" };
         makeCall(map[key]);
       }
       if (key === "escape") ui.whistleDialog.close();
-      event.preventDefault();
-      return;
-    }
-    if (!event.repeat && (key === "i" || key === "o") && !ui.settings.open && !ui.periodDialog.open) {
-      state.camera.distanceOffset = clamp(state.camera.distanceOffset + (key === "i" ? -2 : 2), -20, 32);
-      const baseDistance = canvas.width / canvas.height < 1 ? 28 : 32;
-      const distance = Math.round(clamp(baseDistance + state.camera.distanceOffset, 8, 60));
-      toast(`Caméra ${key === "i" ? "rapprochée" : "éloignée"} · ${distance} m`);
       event.preventDefault();
       return;
     }
