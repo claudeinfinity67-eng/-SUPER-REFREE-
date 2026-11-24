@@ -54,8 +54,7 @@ canvas { display: block; width: 100%; height: 100%; }
 #skinned-referees { position: absolute; inset: 0; z-index: 2; pointer-events: none; background: transparent; }
 .live-pill { position: absolute; top: 13px; left: 14px; display: flex; align-items: center; gap: 7px; padding: 7px 10px; border: 1px solid #ffffff36; border-radius: 20px; background: #071923b8; color: #e9f4f4; font-size: 8px; font-weight: 800; letter-spacing: 1px; backdrop-filter: blur(7px); pointer-events: none; }
 .live-pill i, .live-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--lime); box-shadow: 0 0 9px var(--lime); }
-.camera-toggle { position: absolute; z-index: 4; top: 12px; right: 12px; display: flex; align-items: center; gap: 7px; padding: 8px 10px; border: 1px solid #ffffff42; border-radius: 20px; background: #071923c9; color: #ecf5f2; font-size: 8px; font-weight: 800; letter-spacing: .7px; backdrop-filter: blur(7px); }
-.camera-toggle:hover { border-color: var(--lime); color: var(--lime); }
+.camera-indicator { position: absolute; z-index: 4; top: 12px; right: 12px; display: flex; align-items: center; gap: 7px; padding: 8px 10px; border: 1px solid #ffffff42; border-radius: 20px; background: #071923c9; color: #ecf5f2; font-size: 8px; font-weight: 800; letter-spacing: .7px; backdrop-filter: blur(7px); pointer-events: none; }
 .incident-card { position: absolute; top: 15px; left: 50%; display: flex; align-items: center; gap: 10px; max-width: min(390px, 75%); padding: 10px 14px 10px 10px; transform: translateX(-50%); border: 1px solid #ffe59c66; border-radius: 11px; background: #172a32e8; box-shadow: 0 8px 28px #06141c80; backdrop-filter: blur(8px); }
 .incident-card[hidden] { display: none; }
 .incident-icon { width: 28px; height: 28px; display: grid; place-items: center; flex: 0 0 auto; border-radius: 8px; background: #ffe189; color: #182b31; font-weight: 900; }
