@@ -20,6 +20,24 @@ const refs = [];
 let template = null;
 let clip = null;
 let loaded = false;
+const refereeHeight = 1.6;
+const animationFadeSpeed = 12;
+
+const shadowCanvas = document.createElement("canvas");
+shadowCanvas.width = 64;
+shadowCanvas.height = 64;
+const shadowContext = shadowCanvas.getContext("2d");
+const shadowGradient = shadowContext.createRadialGradient(32, 32, 3, 32, 32, 32);
+shadowGradient.addColorStop(0, "rgba(0, 0, 0, 0.24)");
+shadowGradient.addColorStop(1, "rgba(0, 0, 0, 0)");
+shadowContext.fillStyle = shadowGradient;
+shadowContext.fillRect(0, 0, 64, 64);
+const shadowTexture = new THREE.CanvasTexture(shadowCanvas);
+const shadowMaterial = new THREE.MeshBasicMaterial({
+  map: shadowTexture,
+  transparent: true,
+  depthWrite: false,
+});
 
 const refereeTexture = new THREE.TextureLoader().load("assets/referee-model/texture_diffuse.png");
 refereeTexture.colorSpace = THREE.SRGBColorSpace;
@@ -37,7 +55,7 @@ new FBXLoader().load(
       console.error("Le fichier Patinage.fbx ne contient pas de modèle visible.");
       return;
     }
-    const normalizedScale = 1.2 / size.y;
+    const normalizedScale = refereeHeight / size.y;
     object.scale.multiplyScalar(normalizedScale);
     object.updateMatrixWorld(true);
 
@@ -86,10 +104,18 @@ function makeRef(index) {
   if (action) {
     action.reset();
     action.setEffectiveTimeScale(1);
+    action.setEffectiveWeight(0);
     action.play();
+    action.paused = true;
   }
   object.userData.mixer = mixer;
   object.userData.action = action;
+  object.userData.animationWeight = 0;
+  const shadow = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), shadowMaterial);
+  shadow.rotation.x = -Math.PI / 2;
+  shadow.position.y = -0.014;
+  shadow.scale.set(0.82, 0.5, 1);
+  object.add(shadow);
   scene.add(object);
   refs[index] = object;
   return object;
@@ -124,12 +150,14 @@ function syncRef(index, entity, delta) {
   const action = object.userData.action;
   if (action) {
     const moving = speed > 3;
-    if (moving) {
-      action.paused = false;
-      action.setEffectiveTimeScale(0.55 + Math.min(1, speed / 142) * 0.35);
-    } else if (!action.paused) {
-      action.paused = true;
-    }
+    const targetWeight = moving ? 1 : 0;
+    const blend = 1 - Math.exp(-animationFadeSpeed * delta);
+    const weight = object.userData.animationWeight
+      + (targetWeight - object.userData.animationWeight) * blend;
+    object.userData.animationWeight = weight;
+    action.setEffectiveWeight(weight);
+    action.setEffectiveTimeScale(0.55 + Math.min(1, speed / 142) * 0.35);
+    action.paused = !moving && weight < 0.01;
   }
   return true;
 }
