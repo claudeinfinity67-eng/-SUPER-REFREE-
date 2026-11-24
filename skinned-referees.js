@@ -36,7 +36,7 @@ new FBXLoader().load(
       console.error("Le fichier Patinage.fbx ne contient pas de modèle visible.");
       return;
     }
-    const normalizedScale = 1.65 / size.y;
+    const normalizedScale = 1.2 / size.y;
     object.scale.multiplyScalar(normalizedScale);
     object.updateMatrixWorld(true);
 
