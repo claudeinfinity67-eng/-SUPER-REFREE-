@@ -1034,8 +1034,12 @@
         up = portrait ? [1, 0, 0] : [0, 0, -1];
       } else {
         const fx = Math.sin(state.camera.yaw), fz = Math.cos(state.camera.yaw);
-        eye = [user[0] - fx * 26, 9, user[2] - fz * 26];
-        target = [user[0] + fx * 7, .5, user[2] + fz * 7];
+        const portrait = context.canvas.width / context.canvas.height < 1;
+        const distance = portrait ? 12 : 14;
+        const height = portrait ? 2.6 : 3.2;
+        const lookAhead = portrait ? 4 : 5;
+        eye = [user[0] - fx * distance, height, user[2] - fz * distance];
+        target = [user[0] + fx * lookAhead, .8, user[2] + fz * lookAhead];
       }
       const view = lookAt(eye, target, up);
       const projection = perspective(Math.PI / 3.2, context.canvas.width / context.canvas.height, .1, 140);

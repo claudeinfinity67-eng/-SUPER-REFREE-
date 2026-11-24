@@ -59,8 +59,17 @@ new FBXLoader().load(
       });
     });
 
-    template = object;
-    clip = object.animations.find((item) => item.duration > 0) || null;
+    template = new THREE.Group();
+    template.add(object);
+    clip = object.animations.find((item) => item.duration > 0)?.clone() || null;
+    if (clip) {
+      const rootTracks = new Set([
+        "mixamorigHips.position",
+        "SmartRigArmature.position",
+        "SmartRigArmature.scale",
+      ]);
+      clip.tracks = clip.tracks.filter((track) => !rootTracks.has(track.name));
+    }
     loaded = true;
     window.skinnedReferees.ready = true;
   },
@@ -107,8 +116,8 @@ window.skinnedReferees = {
   sync(cameraState, entities) {
     if (!loaded) return;
     camera.position.set(...cameraState.eye);
-    camera.lookAt(new THREE.Vector3(...cameraState.target));
     camera.up.set(...cameraState.up);
+    camera.lookAt(new THREE.Vector3(...cameraState.target));
     camera.updateProjectionMatrix();
     camera.updateMatrixWorld(true);
     syncRef(0, entities.userRef);
