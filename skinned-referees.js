@@ -23,7 +23,7 @@ let loaded = false;
 
 const refereeTexture = new THREE.TextureLoader().load("assets/referee-model/texture_diffuse.png");
 refereeTexture.colorSpace = THREE.SRGBColorSpace;
-refereeTexture.flipY = false;
+refereeTexture.flipY = true;
 
 new FBXLoader().load(
   "assets/referee-model/Patinage.fbx",
