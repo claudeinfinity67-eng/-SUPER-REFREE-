@@ -89,6 +89,7 @@ function makeRef(index) {
     action.play();
   }
   object.userData.mixer = mixer;
+  object.userData.action = action;
   scene.add(object);
   refs[index] = object;
   return object;
@@ -106,8 +107,17 @@ function syncRef(index, entity) {
   object.visible = true;
 
   const speed = Math.hypot(entity.vx || 0, entity.vy || 0);
-  if (object.userData.mixer) {
-    object.userData.mixer.timeScale = 0.65 + Math.min(1, speed / 90) * 1.35;
+  const action = object.userData.action;
+  if (action) {
+    const moving = speed > 3;
+    if (moving) {
+      action.paused = false;
+      action.setEffectiveTimeScale(0.55 + Math.min(1, speed / 142) * 0.35);
+    } else if (!action.paused) {
+      action.time = 0;
+      action.paused = true;
+      object.userData.mixer.update(0);
+    }
   }
   return true;
 }
