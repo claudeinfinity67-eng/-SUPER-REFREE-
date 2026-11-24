@@ -10,9 +10,9 @@ Jeu de hockey sur glace en **3D WebGL** jouable dans un navigateur. La caméra s
 - **Espace** siffle la décision correspondant à l'incident en cours ; sans incident, le jeu continue. **Échap** met le match en pause.
 - Utilise **Commandes** pour reconfigurer les touches, **Pause** pour interrompre le match et le sélecteur de maillot pour personnaliser ton arbitre.
 
-La patinoire et les personnages sont rendus en WebGL sans bibliothèque 3D externe. Les joueurs des deux équipes patinent et jouent le palet de façon autonome. L'arbitre assistant suit l'action. Le match comprend trois périodes accélérées, les buts, les arrêts du gardien, les hors-jeu, les dégagements interdits, des pénalités temporaires et l'évaluation des décisions. La précision et les points d'expérience sont conservés dans le stockage local du navigateur.
+La patinoire et les joueurs sont rendus en WebGL sans bibliothèque 3D externe. Les arbitres utilisent le modèle OBJ et sa texture du dossier `assets/referee-model/`, chargés dans le même rendu et à la même échelle que le jeu. Leur patinage est animé dans le shader WebGL; le fichier `refree-modele/Patinage.fbx` fourni dans le dépôt est vide et ne peut pas servir de source d'animation.
 
-Les fichiers source du modèle d'arbitre (`assets/referee-model/`) sont conservés dans le dépôt, mais ne sont pas chargés par le jeu. Le rendu utilise les personnages WebGL intégrés pour éviter les problèmes de taille et de cadrage du modèle externe.
+Les joueurs des deux équipes jouent le palet de façon autonome. L'arbitre assistant suit l'action. Le match comprend trois périodes accélérées, les buts, les arrêts du gardien, les hors-jeu, les dégagements interdits, des pénalités temporaires et l'évaluation des décisions. La précision et les points d'expérience sont conservés dans le stockage local du navigateur.
 
 ### Deux infractions différentes
 
