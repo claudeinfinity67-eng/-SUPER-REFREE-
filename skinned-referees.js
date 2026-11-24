@@ -119,9 +119,11 @@ window.skinnedReferees = {
     camera.up.set(...cameraState.up);
     camera.lookAt(new THREE.Vector3(...cameraState.target));
     camera.updateProjectionMatrix();
-    camera.updateMatrixWorld(true);
     syncRef(0, entities.userRef);
     syncRef(1, entities.assistantRef);
+    const delta = Math.min(clock.getDelta(), 0.05);
+    refs.forEach((object) => object?.userData.mixer?.update(delta));
+    renderer.render(scene, camera);
   },
 };
 
@@ -136,10 +138,3 @@ function resize() {
 
 window.addEventListener("resize", resize);
 resize();
-
-renderer.setAnimationLoop(() => {
-  if (!loaded) return;
-  const delta = Math.min(clock.getDelta(), 0.05);
-  refs.forEach((object) => object?.userData.mixer?.update(delta));
-  renderer.render(scene, camera);
-});
