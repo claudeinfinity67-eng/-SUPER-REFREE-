@@ -297,6 +297,7 @@ function makePlayer(entity) {
   object.userData.action = action;
   object.userData.animationWeight = 0;
   object.userData.animationSpeedFactor = 0.93 + (playerIndex % 5) * 0.035;
+  object.userData.lastMovementYaw = null;
   const shadow = new THREE.Mesh(shadowGeometry, shadowMaterial);
   shadow.rotation.x = -Math.PI / 2;
   shadow.position.y = -0.014;
@@ -316,6 +317,14 @@ function syncPlayer(entity, delta) {
   const speed = Math.hypot(entity.vx || 0, entity.vy || 0);
   const movementYaw = speed > 3 ? Math.atan2(entity.vx, entity.vy) : entity.yaw ?? 0;
   const targetYaw = movementYaw + playerModelYawOffset;
+  const previousMovementYaw = object.userData.lastMovementYaw;
+  const turnRate = speed > 3 && previousMovementYaw !== null && delta > 0
+    ? Math.abs(Math.atan2(
+      Math.sin(movementYaw - previousMovementYaw),
+      Math.cos(movementYaw - previousMovementYaw),
+    )) / delta
+    : 0;
+  object.userData.lastMovementYaw = speed > 3 ? movementYaw : null;
   if (!object.userData.hasSynced) {
     object.position.set(targetX, object.position.y, targetZ);
     object.rotation.y = targetYaw;
@@ -335,7 +344,12 @@ function syncPlayer(entity, delta) {
   const action = object.userData.action;
   if (action) {
     const moving = speed > 3;
-    const targetWeight = moving ? 1 : 0;
+    const turnIntensity = Math.min(1, Math.max(0, (turnRate - 0.35) / 1.8));
+    const topSpeed = entity.speed || 120;
+    const sprintIntensity = Math.min(1, Math.max(0, (speed / topSpeed - 0.72) / 0.28));
+    const targetWeight = moving
+      ? Math.min(0.95, 0.35 + turnIntensity * 0.28 + sprintIntensity * 0.32)
+      : 0;
     const blend = 1 - Math.exp(-animationFadeSpeed * delta);
     const weight = object.userData.animationWeight
       + (targetWeight - object.userData.animationWeight) * blend;
