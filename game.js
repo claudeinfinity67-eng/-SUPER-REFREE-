@@ -594,12 +594,10 @@
     const vertexSource = `
       attribute vec3 aPosition;
       attribute vec3 aNormal;
-      attribute vec2 aUV;
       uniform mat4 uViewProjection;
       uniform mat4 uModel;
       uniform float uSkating;
       uniform float uSkatePhase;
-      varying vec2 vUV;
       varying float vLight;
       void main() {
         vec3 position = aPosition;
@@ -650,7 +648,6 @@
         animatedNormal.y = normalY;
 
         vec3 normal = normalize(mat3(uModel) * animatedNormal);
-        vUV = aUV;
         vLight = 0.4 + 0.6 * max(dot(normal, normalize(vec3(-0.45, 0.82, 0.36))), 0.0);
         gl_Position = uViewProjection * uModel * vec4(position, 1.0);
       }
@@ -658,25 +655,18 @@
     const fragmentSource = `
       precision mediump float;
       uniform vec3 uColor;
-      uniform sampler2D uDiffuseTexture;
-      uniform bool uUseTexture;
-      varying vec2 vUV;
       varying float vLight;
       void main() {
-        vec3 baseColor = uUseTexture ? texture2D(uDiffuseTexture, vUV).rgb * uColor : uColor;
-        gl_FragColor = vec4(baseColor * vLight, 1.0);
+        gl_FragColor = vec4(uColor * vLight, 1.0);
       }
     `;
     const program = linkProgram(context, vertexSource, fragmentSource);
     const loc = {
       position: context.getAttribLocation(program, "aPosition"),
       normal: context.getAttribLocation(program, "aNormal"),
-      uv: context.getAttribLocation(program, "aUV"),
       viewProjection: context.getUniformLocation(program, "uViewProjection"),
       model: context.getUniformLocation(program, "uModel"),
       color: context.getUniformLocation(program, "uColor"),
-      diffuseTexture: context.getUniformLocation(program, "uDiffuseTexture"),
-      useTexture: context.getUniformLocation(program, "uUseTexture"),
       skating: context.getUniformLocation(program, "uSkating"),
       skatePhase: context.getUniformLocation(program, "uSkatePhase"),
     };
@@ -685,7 +675,6 @@
       sphere: uploadGeometry(context, makeSphere()),
       cylinder: uploadGeometry(context, makeCylinder(false)),
       ring: uploadGeometry(context, makeRing()),
-      referee: null,
     };
     const viewProjection = new Float32Array(16);
     context.enable(context.DEPTH_TEST);
@@ -693,86 +682,6 @@
     context.disable(context.CULL_FACE);
 
     function resize(width, height) { context.viewport(0, 0, width, height); }
-
-    async function loadRefereeModel(modelUrl, textureUrl) {
-      try {
-        const [modelResponse, image] = await Promise.all([
-          fetch(modelUrl),
-          new Promise((resolve, reject) => {
-            const image = new Image();
-            image.onload = () => resolve(image);
-            image.onerror = () => reject(new Error(`Impossible de charger la texture ${textureUrl}`));
-            image.src = textureUrl;
-          }),
-        ]);
-        if (!modelResponse.ok) throw new Error(`HTTP ${modelResponse.status} pour ${modelUrl}`);
-        const text = await modelResponse.text();
-        const positions = [];
-        const texcoords = [];
-        const normals = [];
-        const faces = [];
-        text.split(/\r?\n/).forEach((line, lineIndex) => {
-          const parts = line.trim().split(/\s+/);
-          if (parts[0] === "v") positions.push(parts.slice(1, 4).map(Number));
-          else if (parts[0] === "vt") texcoords.push(parts.slice(1, 3).map(Number));
-          else if (parts[0] === "vn") normals.push(parts.slice(1, 4).map(Number));
-          else if (parts[0] === "f") {
-            if (parts.length < 4) throw new Error(`Face OBJ invalide à la ligne ${lineIndex + 1}`);
-            faces.push({ line: lineIndex + 1, corners: parts.slice(1).map(token => token.split("/").map(Number)) });
-          }
-        });
-
-        const vertexCount = faces.reduce((count, face) => count + (face.corners.length - 2) * 3, 0);
-        const vertices = new Float32Array(vertexCount * 8);
-        let offset = 0;
-        const resolveIndex = (index, length) => index > 0 ? index - 1 : length + index;
-        const appendVertex = (position, normal, texcoord) => {
-          vertices.set(position, offset); offset += 3;
-          vertices.set(normal, offset); offset += 3;
-          vertices.set(texcoord, offset); offset += 2;
-        };
-        for (const face of faces) {
-          for (let triangle = 1; triangle < face.corners.length - 1; triangle++) {
-            const corners = [face.corners[0], face.corners[triangle], face.corners[triangle + 1]];
-            const points = corners.map(([positionIndex]) => positions[resolveIndex(positionIndex, positions.length)]);
-            if (points.some(point => !point || point.length !== 3 || point.some(value => !Number.isFinite(value)))) {
-              throw new Error(`Indice de sommet invalide à la ligne ${face.line}`);
-            }
-            const abX = points[1][0] - points[0][0], abY = points[1][1] - points[0][1], abZ = points[1][2] - points[0][2];
-            const acX = points[2][0] - points[0][0], acY = points[2][1] - points[0][1], acZ = points[2][2] - points[0][2];
-            const normalX = abY * acZ - abZ * acY;
-            const normalY = abZ * acX - abX * acZ;
-            const normalZ = abX * acY - abY * acX;
-            const normalLength = Math.hypot(normalX, normalY, normalZ) || 1;
-            const fallbackNormal = [normalX / normalLength, normalY / normalLength, normalZ / normalLength];
-            corners.forEach(([positionIndex, texcoordIndex, normalIndex], corner) => {
-              const texcoord = texcoordIndex ? texcoords[resolveIndex(texcoordIndex, texcoords.length)] : [0, 0];
-              const normal = normalIndex ? normals[resolveIndex(normalIndex, normals.length)] : fallbackNormal;
-              if (!texcoord || texcoord.length !== 2 || !normal || normal.length !== 3 ||
-                  texcoord.some(value => !Number.isFinite(value)) || normal.some(value => !Number.isFinite(value))) {
-                throw new Error(`Coordonnées de texture ou normale invalides à la ligne ${face.line}`);
-              }
-              appendVertex(points[corner], normal, texcoord);
-            });
-          }
-        }
-        if (!positions.length || !vertexCount) throw new Error("Le modèle OBJ ne contient aucune géométrie exploitable.");
-
-        const texture = context.createTexture();
-        context.bindTexture(context.TEXTURE_2D, texture);
-        context.pixelStorei(context.UNPACK_FLIP_Y_WEBGL, true);
-        context.texImage2D(context.TEXTURE_2D, 0, context.RGBA, context.RGBA, context.UNSIGNED_BYTE, image);
-        context.texParameteri(context.TEXTURE_2D, context.TEXTURE_WRAP_S, context.CLAMP_TO_EDGE);
-        context.texParameteri(context.TEXTURE_2D, context.TEXTURE_WRAP_T, context.CLAMP_TO_EDGE);
-        context.texParameteri(context.TEXTURE_2D, context.TEXTURE_MIN_FILTER, context.LINEAR_MIPMAP_LINEAR);
-        context.texParameteri(context.TEXTURE_2D, context.TEXTURE_MAG_FILTER, context.LINEAR);
-        context.generateMipmap(context.TEXTURE_2D);
-        meshes.referee = uploadGeometry(context, { vertices, stride: 32, texture });
-      } catch (error) {
-        console.warn("Le modèle 3D de l'arbitre n'a pas pu être chargé; le modèle intégré reste actif.", error);
-        toast("Modèle 3D indisponible : affichage de secours activé");
-      }
-    }
 
     function modelMatrix(x, y, z, sx, sy, sz, yaw = 0) {
       const c = Math.cos(yaw), s = Math.sin(yaw);
@@ -791,18 +700,6 @@
       context.vertexAttribPointer(loc.position, 3, context.FLOAT, false, mesh.stride || 24, 0);
       context.enableVertexAttribArray(loc.normal);
       context.vertexAttribPointer(loc.normal, 3, context.FLOAT, false, mesh.stride || 24, 12);
-      if (mesh.texture) {
-        context.enableVertexAttribArray(loc.uv);
-        context.vertexAttribPointer(loc.uv, 2, context.FLOAT, false, mesh.stride, 24);
-        context.activeTexture(context.TEXTURE0);
-        context.bindTexture(context.TEXTURE_2D, mesh.texture);
-        context.uniform1i(loc.diffuseTexture, 0);
-        context.uniform1i(loc.useTexture, 1);
-      } else {
-        context.disableVertexAttribArray(loc.uv);
-        context.vertexAttrib2f(loc.uv, 0, 0);
-        context.uniform1i(loc.useTexture, 0);
-      }
       context.uniformMatrix4fv(loc.model, false, model);
       context.uniform3fv(loc.color, color);
       if (mesh.indices) {
@@ -996,21 +893,6 @@
       cylinder(p[0], p[1], p[2], .16, .12, [0.08, 0.095, 0.1]);
     }
 
-    function drawRefereeModel(entity, time, assistant = false) {
-      if (window.skinnedReferees?.ready) return true;
-      if (!meshes.referee) return false;
-      const p = world(entity.x, entity.y, 0);
-      const speed = Math.hypot(entity.vx || 0, entity.vy || 0);
-      const skating = Math.min(1, speed / 70);
-      const direction = (entity.vx || 0) * Math.sin(entity.yaw || 0) + (entity.vy || 0) * Math.cos(entity.yaw || 0);
-      context.uniform1f(loc.skating, skating);
-      context.uniform1f(loc.skatePhase, time * 7.5 * (direction < 0 ? -1 : 1));
-      const scale = 0.88;
-      draw(meshes.referee, p[0], p[1], p[2], scale, scale, scale, assistant ? [0.9, 1, 0.72] : hexColor(state.uniform), entity.yaw || 0);
-      context.uniform1f(loc.skating, 0);
-      return true;
-    }
-
     function render(time) {
       if (!context.canvas.width || !context.canvas.height) return;
       context.clearColor(0.035, 0.09, 0.13, 1);
@@ -1039,12 +921,14 @@
         });
       }
       state.players.forEach(player => drawHockeyPlayer(player, seconds));
-      if (!drawRefereeModel(state.refs[1], seconds, true)) drawHockeyPlayer(state.refs[1], seconds, true, true);
-      if (!drawRefereeModel(state.userRef, seconds)) drawHockeyPlayer(state.userRef, seconds, true, false);
+      if (!window.skinnedReferees?.ready) {
+        drawHockeyPlayer(state.refs[1], seconds, true, true);
+        drawHockeyPlayer(state.userRef, seconds, true, false);
+      }
       drawPuck();
     }
 
-    return { resize, render, loadRefereeModel };
+    return { resize, render };
   }
 
   function linkProgram(context, vertexSource, fragmentSource) {
@@ -1085,7 +969,6 @@
       indices,
       count: data.indices ? data.indices.length : data.vertices.length / ((data.stride || 24) / 4),
       stride: data.stride || 24,
-      texture: data.texture || null,
     };
   }
 
@@ -1331,6 +1214,5 @@
   renderBindings();
   resize();
   updateScoreboard();
-  if (renderer) renderer.loadRefereeModel("assets/referee-model/base.obj", "assets/referee-model/texture_diffuse.png");
   requestAnimationFrame(loop);
 })();
