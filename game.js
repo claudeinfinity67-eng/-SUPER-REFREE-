@@ -999,6 +999,7 @@
     }
 
     function drawRefereeModel(entity, time, assistant = false) {
+      if (window.skinnedReferees?.ready) return true;
       if (!meshes.referee) return false;
       const p = world(entity.x, entity.y, 0);
       const speed = Math.hypot(entity.vx || 0, entity.vy || 0);
@@ -1043,6 +1044,12 @@
 
       drawRink();
       const seconds = time / 1000;
+      if (window.skinnedReferees) {
+        window.skinnedReferees.sync({ eye, target, up }, {
+          userRef: state.userRef,
+          assistantRef: state.refs[1],
+        });
+      }
       state.players.forEach(player => drawHockeyPlayer(player, seconds));
       if (!drawRefereeModel(state.refs[1], seconds, true)) drawHockeyPlayer(state.refs[1], seconds, true, true);
       if (!drawRefereeModel(state.userRef, seconds)) drawHockeyPlayer(state.userRef, seconds, true, false);
