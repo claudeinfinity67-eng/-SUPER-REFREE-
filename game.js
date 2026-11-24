@@ -117,6 +117,16 @@
   const distance = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
   const attackDir = team => (team === 0) === state.attackToRight ? 1 : -1;
   const opponentGoalX = team => attackDir(team) > 0 ? RINK.goalRight : RINK.goalLeft;
+  const cameraBaseDistance = () => canvas.width / canvas.height < 1 ? 28 : 32;
+  const currentCameraDistance = () => Math.round(clamp(cameraBaseDistance() + state.camera.distanceOffset, 8, 60));
+  function adjustCameraDistance(direction) {
+    const baseDistance = cameraBaseDistance();
+    const currentDistance = currentCameraDistance();
+    const nextDistance = clamp(currentDistance + direction * 4, 8, 60);
+    state.camera.distanceOffset = nextDistance - baseDistance;
+    document.querySelector("#camera-distance").textContent = `${nextDistance} m`;
+    toast(`Caméra ${direction < 0 ? "rapprochée" : "éloignée"} · ${nextDistance} m`);
+  }
 
   function createPlayer(team, role, x, y, number) {
     return { team, role, x, y, vx: 0, vy: 0, yaw: Math.PI / 2, homeX: x, homeY: y, number, speed: role === "goalie" ? 65 : 104 + Math.random() * 18, radius: role === "goalie" ? 16 : 12, nextMove: 0, target: null, checkCooldown: 0 };
@@ -192,6 +202,7 @@
     canvas.height = Math.max(1, Math.round(rect.height * dpr));
     canvas.style.width = `${rect.width}px`;
     canvas.style.height = `${rect.height}px`;
+    document.querySelector("#camera-distance").textContent = `${currentCameraDistance()} m`;
     if (gl) {
       gl.viewport(0, 0, canvas.width, canvas.height);
       if (renderer) renderer.resize(canvas.width, canvas.height);
@@ -904,7 +915,7 @@
       const baseDistance = portrait ? 28 : 32;
       const baseHeight = portrait ? 4.5 : 5;
       const baseLookAhead = portrait ? 8 : 9;
-      const distance = clamp(baseDistance + state.camera.distanceOffset, 8, 60);
+      const distance = currentCameraDistance();
       const zoom = distance / baseDistance;
       const height = 0.8 + (baseHeight - 0.8) * zoom;
       const lookAhead = baseLookAhead * zoom;
@@ -1141,11 +1152,9 @@
       return;
     }
     if (isEditable(event.target)) return;
-    if (!event.repeat && (key === "i" || key === "o") && !ui.settings.open) {
-      state.camera.distanceOffset = clamp(state.camera.distanceOffset + (key === "i" ? -2 : 2), -20, 32);
-      const baseDistance = canvas.width / canvas.height < 1 ? 28 : 32;
-      const distance = Math.round(clamp(baseDistance + state.camera.distanceOffset, 8, 60));
-      toast(`Caméra ${key === "i" ? "rapprochée" : "éloignée"} · ${distance} m`);
+    const cameraDirection = key === "i" || event.code === "KeyI" ? -1 : key === "o" || event.code === "KeyO" ? 1 : 0;
+    if (cameraDirection && !ui.settings.open) {
+      adjustCameraDistance(cameraDirection);
       event.preventDefault();
       return;
     }
@@ -1172,6 +1181,8 @@
   });
   window.addEventListener("keyup", event => state.pressed.delete(codeToKey(event)));
   window.addEventListener("blur", () => state.pressed.clear());
+  document.querySelector("#camera-closer").addEventListener("click", () => adjustCameraDistance(-1));
+  document.querySelector("#camera-farther").addEventListener("click", () => adjustCameraDistance(1));
   document.querySelectorAll(".decision-button").forEach(button => button.addEventListener("click", () => makeCall(button.dataset.call)));
   document.querySelector("#pause-button").addEventListener("click", togglePause);
   document.querySelector("#period-continue").addEventListener("click", continueAfterPeriod);
