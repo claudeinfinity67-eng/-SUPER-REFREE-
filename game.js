@@ -44,7 +44,7 @@
     puck: { x: 700, y: 360, vx: 0, vy: 0, carrier: null, lastTouch: null, fromX: 700, fromY: 360, shot: false },
     refs: [],
     userRef: null,
-    camera: { x: 700, y: 360, yaw: Math.PI / 2 },
+    camera: { x: 700, y: 360, yaw: Math.PI / 2, distanceOffset: 0 },
     score: [0, 0],
     period: 1,
     attackToRight: true,
@@ -901,9 +901,13 @@
       const user = world(state.userRef.x, state.userRef.y, 0);
       const fx = Math.sin(state.camera.yaw), fz = Math.cos(state.camera.yaw);
       const portrait = context.canvas.width / context.canvas.height < 1;
-      const distance = portrait ? 28 : 32;
-      const height = portrait ? 4.5 : 5;
-      const lookAhead = portrait ? 8 : 9;
+      const baseDistance = portrait ? 28 : 32;
+      const baseHeight = portrait ? 4.5 : 5;
+      const baseLookAhead = portrait ? 8 : 9;
+      const distance = clamp(baseDistance + state.camera.distanceOffset, 8, 60);
+      const zoom = distance / baseDistance;
+      const height = 0.8 + (baseHeight - 0.8) * zoom;
+      const lookAhead = baseLookAhead * zoom;
       const eye = [user[0] - fx * distance, height, user[2] - fz * distance];
       const target = [user[0] + fx * lookAhead, .8, user[2] + fz * lookAhead];
       const up = [0, 1, 0];
@@ -1127,6 +1131,10 @@
         toast("Cette touche est déjà attribuée");
         return;
       }
+      if (key === "i" || key === "o") {
+        toast("I et O sont réservées au réglage de la caméra");
+        return;
+      }
       state.bindings[state.listeningFor] = key;
       state.listeningFor = null;
       save(); renderBindings();
@@ -1139,6 +1147,14 @@
         makeCall(map[key]);
       }
       if (key === "escape") ui.whistleDialog.close();
+      event.preventDefault();
+      return;
+    }
+    if (!event.repeat && (key === "i" || key === "o") && !ui.settings.open && !ui.periodDialog.open) {
+      state.camera.distanceOffset = clamp(state.camera.distanceOffset + (key === "i" ? -2 : 2), -20, 32);
+      const baseDistance = canvas.width / canvas.height < 1 ? 28 : 32;
+      const distance = Math.round(clamp(baseDistance + state.camera.distanceOffset, 8, 60));
+      toast(`Caméra ${key === "i" ? "rapprochée" : "éloignée"} · ${distance} m`);
       event.preventDefault();
       return;
     }
