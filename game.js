@@ -25,7 +25,6 @@
     xp: document.querySelector("#career-xp"),
     progress: document.querySelector("#xp-progress"),
     nextLevel: document.querySelector("#next-level"),
-    cameraMode: document.querySelector("#camera-mode"),
     uniform: document.querySelector("#uniform-color"),
     settings: document.querySelector("#settings-dialog"),
     periodDialog: document.querySelector("#period-dialog"),
@@ -46,7 +45,6 @@
     refs: [],
     userRef: null,
     camera: { x: 700, y: 360, yaw: Math.PI / 2 },
-    cameraView: "overhead",
     score: [0, 0],
     period: 1,
     attackToRight: true,
@@ -1019,28 +1017,14 @@
       context.clear(context.COLOR_BUFFER_BIT | context.DEPTH_BUFFER_BIT);
       context.useProgram(program);
       const user = world(state.userRef.x, state.userRef.y, 0);
-      let eye, target, up = [0, 1, 0];
-      if (state.cameraView === "overhead") {
-        const aspect = context.canvas.width / context.canvas.height;
-        const portrait = aspect < 1;
-        const rinkWidth = (RINK.right - RINK.left) * .05;
-        const rinkDepth = (RINK.bottom - RINK.top) * .05;
-        const verticalExtent = portrait
-          ? Math.max(rinkWidth, rinkDepth / aspect)
-          : Math.max(rinkDepth, rinkWidth / aspect);
-        const cameraHeight = verticalExtent / (2 * Math.tan(Math.PI / 6.4)) * 1.12;
-        eye = [0, cameraHeight, 0];
-        target = [0, 0, 0];
-        up = portrait ? [1, 0, 0] : [0, 0, -1];
-      } else {
-        const fx = Math.sin(state.camera.yaw), fz = Math.cos(state.camera.yaw);
-        const portrait = context.canvas.width / context.canvas.height < 1;
-        const distance = portrait ? 12 : 14;
-        const height = portrait ? 2.6 : 3.2;
-        const lookAhead = portrait ? 4 : 5;
-        eye = [user[0] - fx * distance, height, user[2] - fz * distance];
-        target = [user[0] + fx * lookAhead, .8, user[2] + fz * lookAhead];
-      }
+      const fx = Math.sin(state.camera.yaw), fz = Math.cos(state.camera.yaw);
+      const portrait = context.canvas.width / context.canvas.height < 1;
+      const distance = portrait ? 16 : 18;
+      const height = portrait ? 2.8 : 3.5;
+      const lookAhead = portrait ? 4 : 5;
+      const eye = [user[0] - fx * distance, height, user[2] - fz * distance];
+      const target = [user[0] + fx * lookAhead, .8, user[2] + fz * lookAhead];
+      const up = [0, 1, 0];
       const view = lookAt(eye, target, up);
       const projection = perspective(Math.PI / 3.2, context.canvas.width / context.canvas.height, .1, 140);
       multiplyMatrix(viewProjection, projection, view);
@@ -1293,10 +1277,6 @@
   document.querySelector("#pause-button").addEventListener("click", togglePause);
   document.querySelector("#period-continue").addEventListener("click", continueAfterPeriod);
   document.querySelector("#settings-open").addEventListener("click", () => ui.settings.showModal());
-  document.querySelector("#camera-toggle").addEventListener("click", () => {
-    state.cameraView = state.cameraView === "chase" ? "overhead" : "chase";
-    ui.cameraMode.textContent = state.cameraView === "chase" ? "VUE 3E PERSONNE" : "VUE AÉRIENNE";
-  });
   document.querySelector("#uniform-color").addEventListener("change", event => { state.uniform = event.target.value; save(); });
   document.querySelector("#reset-bindings").addEventListener("click", () => { state.bindings = { ...defaults }; state.listeningFor = null; save(); renderBindings(); });
   document.querySelector("#mobile-help").addEventListener("click", () => toast("Déplace-toi avec le joystick dans la patinoire."));

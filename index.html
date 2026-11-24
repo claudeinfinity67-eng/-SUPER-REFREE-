@@ -43,12 +43,12 @@
           </div>
 
           <div class="rink-frame" id="rink-frame">
-            <canvas id="rink" aria-label="Match de hockey en 3D, vue aérienne ou troisième personne"></canvas>
+            <canvas id="rink" aria-label="Match de hockey en 3D, vue à la troisième personne"></canvas>
             <canvas id="skinned-referees" aria-label="Arbitres 3D animés"></canvas>
             <div class="live-pill"><i></i><span id="live-label">MATCH EN DIRECT</span></div>
-            <button class="camera-toggle" id="camera-toggle" type="button" aria-label="Changer le point de vue">
-              <span>◉</span><span id="camera-mode">VUE AÉRIENNE</span>
-            </button>
+            <div class="camera-indicator" aria-label="Vue à la troisième personne">
+              <span>◉</span><span>VUE 3E PERSONNE</span>
+            </div>
             <div class="incident-card" id="incident-card" hidden role="status" aria-live="assertive">
               <span class="incident-icon" id="incident-icon">!</span>
               <div><strong id="incident-title">DÉCISION À PRENDRE</strong><p id="incident-copy"></p></div>
