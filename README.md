@@ -10,7 +10,7 @@ Jeu de hockey sur glace en **3D WebGL** jouable dans un navigateur. La caméra s
 - **Espace** siffle la décision correspondant à l'incident en cours ; sans incident, le jeu continue. **Échap** met le match en pause.
 - Utilise **Commandes** pour reconfigurer les touches, **Pause** pour interrompre le match et le sélecteur de maillot pour personnaliser ton arbitre.
 
-La patinoire et les joueurs sont rendus en WebGL. Les arbitres utilisent le vrai fichier `assets/referee-model/Patinage.fbx`, avec la texture du dossier `assets/referee-model/`. L'animation est pilotée par le squelette FBX et sa vitesse suit le déplacement. Le modèle OBJ reste disponible comme rendu de secours si le FBX ne peut pas être chargé.
+La patinoire et les joueurs sont rendus en WebGL. Le fichier `assets/referee-model/Patinage.fbx` contient déjà le modèle skinné et l'animation créée; le jeu utilise ce fichier comme unique modèle d'arbitre animé, avec sa texture. Un personnage intégré sert de secours si le FBX ne peut pas être chargé.
 
 Les joueurs des deux équipes jouent le palet de façon autonome. L'arbitre assistant suit l'action. Le match comprend trois périodes accélérées, les buts, les arrêts du gardien, les hors-jeu, les dégagements interdits, des pénalités temporaires et l'évaluation des décisions. La précision et les points d'expérience sont conservés dans le stockage local du navigateur.
 
