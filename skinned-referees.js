@@ -102,7 +102,7 @@ function syncRef(index, entity) {
 
   object.position.x = (entity.x - 700) * 0.05;
   object.position.z = (entity.y - 360) * 0.05;
-  object.rotation.y = (entity.yaw || 0) - Math.PI / 2;
+  object.rotation.y = entity.yaw || 0;
   object.visible = true;
 
   const speed = Math.hypot(entity.vx || 0, entity.vy || 0);
