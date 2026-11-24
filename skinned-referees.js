@@ -281,8 +281,10 @@ function makePlayer(entity) {
   const object = cloneSkinnedObject(playerTemplate);
   const mixer = playerClip ? new THREE.AnimationMixer(object) : null;
   const action = mixer ? mixer.clipAction(playerClip) : null;
+  const playerIndex = (entity.team || 0) * 6 + (entity.number || 1) - 1;
   if (action) {
     action.reset();
+    action.time = playerClip.duration * ((playerIndex % 12) / 12);
     action.setEffectiveTimeScale(1);
     action.setEffectiveWeight(0);
     action.play();
@@ -294,6 +296,7 @@ function makePlayer(entity) {
   object.userData.mixer = mixer;
   object.userData.action = action;
   object.userData.animationWeight = 0;
+  object.userData.animationSpeedFactor = 0.93 + (playerIndex % 5) * 0.035;
   const shadow = new THREE.Mesh(shadowGeometry, shadowMaterial);
   shadow.rotation.x = -Math.PI / 2;
   shadow.position.y = -0.014;
@@ -338,7 +341,9 @@ function syncPlayer(entity, delta) {
       + (targetWeight - object.userData.animationWeight) * blend;
     object.userData.animationWeight = weight;
     action.setEffectiveWeight(weight);
-    action.setEffectiveTimeScale(0.65 + Math.min(1, speed / 120) * 0.35);
+    action.setEffectiveTimeScale(
+      (0.65 + Math.min(1, speed / 120) * 0.35) * object.userData.animationSpeedFactor,
+    );
     action.paused = !moving && weight < 0.01;
   }
 }
