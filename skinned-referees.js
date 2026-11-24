@@ -95,15 +95,29 @@ function makeRef(index) {
   return object;
 }
 
-function syncRef(index, entity) {
+function syncRef(index, entity, delta) {
   if (!loaded) return false;
   let object = refs[index];
   if (!object) object = makeRef(index);
   if (!object) return false;
 
-  object.position.x = (entity.x - 700) * 0.05;
-  object.position.z = (entity.y - 360) * 0.05;
-  object.rotation.y = entity.yaw || 0;
+  const targetX = (entity.x - 700) * 0.05;
+  const targetZ = (entity.y - 360) * 0.05;
+  const targetYaw = entity.yaw ?? 0;
+  if (!object.userData.hasSynced) {
+    object.position.set(targetX, object.position.y, targetZ);
+    object.rotation.y = targetYaw;
+    object.userData.hasSynced = true;
+  } else {
+    const positionAlpha = 1 - Math.exp(-18 * delta);
+    object.position.x += (targetX - object.position.x) * positionAlpha;
+    object.position.z += (targetZ - object.position.z) * positionAlpha;
+    const yawDelta = Math.atan2(
+      Math.sin(targetYaw - object.rotation.y),
+      Math.cos(targetYaw - object.rotation.y),
+    );
+    object.rotation.y += yawDelta * (1 - Math.exp(-20 * delta));
+  }
   object.visible = true;
 
   const speed = Math.hypot(entity.vx || 0, entity.vy || 0);
@@ -114,9 +128,7 @@ function syncRef(index, entity) {
       action.paused = false;
       action.setEffectiveTimeScale(0.55 + Math.min(1, speed / 142) * 0.35);
     } else if (!action.paused) {
-      action.time = 0;
       action.paused = true;
-      object.userData.mixer.update(0);
     }
   }
   return true;
@@ -126,13 +138,13 @@ window.skinnedReferees = {
   ready: false,
   sync(cameraState, entities) {
     if (!loaded) return;
+    const delta = Math.min(clock.getDelta(), 0.05);
     camera.position.set(...cameraState.eye);
     camera.up.set(...cameraState.up);
     camera.lookAt(new THREE.Vector3(...cameraState.target));
     camera.updateProjectionMatrix();
-    syncRef(0, entities.userRef);
-    syncRef(1, entities.assistantRef);
-    const delta = Math.min(clock.getDelta(), 0.05);
+    syncRef(0, entities.userRef, delta);
+    syncRef(1, entities.assistantRef, delta);
     refs.forEach((object) => object?.userData.mixer?.update(delta));
     renderer.render(scene, camera);
   },
