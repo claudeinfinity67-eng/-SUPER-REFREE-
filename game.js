@@ -1019,9 +1019,9 @@
       const user = world(state.userRef.x, state.userRef.y, 0);
       const fx = Math.sin(state.camera.yaw), fz = Math.cos(state.camera.yaw);
       const portrait = context.canvas.width / context.canvas.height < 1;
-      const distance = portrait ? 16 : 18;
-      const height = portrait ? 2.8 : 3.5;
-      const lookAhead = portrait ? 4 : 5;
+      const distance = portrait ? 28 : 32;
+      const height = portrait ? 4.5 : 5;
+      const lookAhead = portrait ? 8 : 9;
       const eye = [user[0] - fx * distance, height, user[2] - fz * distance];
       const target = [user[0] + fx * lookAhead, .8, user[2] + fz * lookAhead];
       const up = [0, 1, 0];
