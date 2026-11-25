@@ -211,13 +211,15 @@
   function movePlayerToward(player, x, y, dt, speed = player.speed) {
     const dx = x - player.x, dy = y - player.y;
     const len = Math.hypot(dx, dy);
-    if (len < 2) { player.vx *= .8; player.vy *= .8; return; }
-    const velocity = Math.min(speed, len * 2.2);
-    player.vx += (dx / len * velocity - player.vx) * Math.min(1, dt * 5);
-    player.vy += (dy / len * velocity - player.vy) * Math.min(1, dt * 5);
+    const velocity = len > 0.5 ? Math.min(speed, len * 1.8) : 0;
+    const response = 1 - Math.exp(-7.5 * dt);
+    player.vx += (len ? dx / len * velocity : -player.vx) * response;
+    player.vy += (len ? dy / len * velocity : -player.vy) * response;
     player.x += player.vx * dt;
     player.y += player.vy * dt;
-    if (Math.hypot(player.vx, player.vy) > 3) player.yaw = Math.atan2(player.vx, player.vy);
+    if (Math.hypot(player.vx, player.vy) > 3) {
+      player.yaw = approachAngle(player.yaw, Math.atan2(player.vx, player.vy), dt * 8);
+    }
     player.x = clamp(player.x, RINK.left + 18, RINK.right - 18);
     player.y = clamp(player.y, RINK.top + 18, RINK.bottom - 18);
   }
@@ -606,9 +608,10 @@
     } else {
       state.userRef.vx *= .72; state.userRef.vy *= .72;
     }
-    state.camera.x += (state.userRef.x - state.camera.x) * Math.min(1, dt * 4);
-    state.camera.y += (state.userRef.y - state.camera.y) * Math.min(1, dt * 4);
-    state.camera.yaw = approachAngle(state.camera.yaw, state.userRef.yaw, dt * 5);
+    const cameraBlend = 1 - Math.exp(-7 * dt);
+    state.camera.x += (state.userRef.x - state.camera.x) * cameraBlend;
+    state.camera.y += (state.userRef.y - state.camera.y) * cameraBlend;
+    state.camera.yaw = approachAngle(state.camera.yaw, state.userRef.yaw, dt * 7);
     updateScoreboard();
   }
 
@@ -836,6 +839,110 @@
       draw(meshes.ring, p[0], p[1], p[2], radius * .05, .02, radius * .05, color);
     }
 
+    function buildStandBatches() {
+      const boxGeometry = makeBox();
+      const batches = new Map();
+      const addBox = (x, y, z, sx, sy, sz, color, yaw = 0) => {
+        const key = color.join(",");
+        if (!batches.has(key)) batches.set(key, []);
+        const vertices = batches.get(key);
+        const angleCos = Math.cos(yaw), angleSin = Math.sin(yaw);
+        const position = world(x, z, y);
+        for (const index of boxGeometry.indices) {
+          const offset = index * 6;
+          const localX = boxGeometry.vertices[offset] * sx;
+          const localY = boxGeometry.vertices[offset + 1] * sy;
+          const localZ = boxGeometry.vertices[offset + 2] * sz;
+          const normalX = boxGeometry.vertices[offset + 3];
+          const normalY = boxGeometry.vertices[offset + 4];
+          const normalZ = boxGeometry.vertices[offset + 5];
+          vertices.push(
+            position[0] + localX * angleCos + localZ * angleSin,
+            position[1] + localY,
+            position[2] - localX * angleSin + localZ * angleCos,
+            normalX * angleCos + normalZ * angleSin,
+            normalY,
+            normalZ * angleCos - normalX * angleSin,
+          );
+        }
+      };
+      const colors = {
+        home: [0.78, 0.13, 0.19],
+        away: [0.08, 0.34, 0.67],
+        dark: [0.11, 0.14, 0.2],
+        light: [0.79, 0.83, 0.84],
+        skin: [0.72, 0.48, 0.34],
+        deck: [0.24, 0.29, 0.34],
+        glass: [0.53, 0.72, 0.78],
+      };
+      const addLongStands = (side) => {
+        const edge = side < 0 ? RINK.top : RINK.bottom;
+        const sideIndex = side < 0 ? 0 : 1;
+        const midpoint = (RINK.left + RINK.right) / 2;
+        for (let tier = 0; tier < 3; tier++) {
+          const z = edge + side * (0.9 + tier * 0.78);
+          const platformY = 0.42 + tier * 0.46;
+          addBox(midpoint, platformY, z, RINK.right - RINK.left + 14, 0.14, 0.88, colors.deck);
+          for (let x = RINK.left + 18, seat = 0; x < RINK.right - 18; x += 1.12, seat++) {
+            const homeSide = x < midpoint;
+            const jersey = (seat + tier * 3 + sideIndex) % 5 === 0
+              ? colors.dark
+              : homeSide ? colors.home : colors.away;
+            const seatZ = z + side * 0.05;
+            const bodyY = platformY + 0.34;
+            addBox(x, bodyY, seatZ, 0.3, 0.34, 0.26, jersey);
+            addBox(x, bodyY + 0.25, seatZ, 0.19, 0.19, 0.19,
+              (seat + tier + sideIndex) % 3 === 0 ? colors.skin : colors.dark);
+          }
+        }
+        const outerZ = edge + side * 3.25;
+        addBox(midpoint, 1.72, outerZ, RINK.right - RINK.left + 22, 3.1, 0.22, colors.dark);
+        addBox(midpoint, 2.65, edge + side * 0.58, RINK.right - RINK.left + 10, 0.07, 0.08, colors.glass);
+        for (let section = 0; section < 12; section++) {
+          const x = RINK.left + 25 + section * ((RINK.right - RINK.left - 50) / 11);
+          addBox(x, 2.72, edge + side * 2.72, 2.4, 0.32, 0.08,
+            section % 2 === 0 ? colors.home : colors.away);
+        }
+      };
+      const addEndStands = (side) => {
+        const edge = side < 0 ? RINK.left : RINK.right;
+        const outward = side < 0 ? -1 : 1;
+        for (let tier = 0; tier < 3; tier++) {
+          const x = edge + outward * (0.9 + tier * 0.78);
+          const platformY = 0.42 + tier * 0.46;
+          addBox(x, platformY, WORLD.centerY, 0.88, 0.14, RINK.bottom - RINK.top - 14,
+            colors.deck, Math.PI / 2);
+          for (let z = RINK.top + 18, seat = 0; z < RINK.bottom - 18; z += 1.12, seat++) {
+            const homeSide = (z < WORLD.centerY) === (side < 0);
+            const jersey = (seat + tier + side) % 5 === 0
+              ? colors.dark
+              : homeSide ? colors.home : colors.away;
+            const bodyY = platformY + 0.34;
+            addBox(x, bodyY, z, 0.3, 0.34, 0.26, jersey, Math.PI / 2);
+            addBox(x, bodyY + 0.25, z, 0.19, 0.19, 0.19,
+              (seat + tier) % 3 === 0 ? colors.skin : colors.dark, Math.PI / 2);
+          }
+        }
+        addBox(edge + outward * 3.25, 1.72, WORLD.centerY, 0.22, 3.1,
+          RINK.bottom - RINK.top + 22, colors.dark);
+      };
+      addLongStands(-1);
+      addLongStands(1);
+      addEndStands(-1);
+      addEndStands(1);
+      return [...batches].map(([key, vertices]) => ({
+        mesh: uploadGeometry(context, { vertices: new Float32Array(vertices) }),
+        color: key.split(",").map(Number),
+      }));
+    }
+    const standBatches = buildStandBatches();
+
+    function drawStands() {
+      for (const batch of standBatches) {
+        draw(batch.mesh, 0, 0, 0, 1, 1, 1, batch.color);
+      }
+    }
+
     function drawGoal(x, direction) {
       const gx = (x - WORLD.centerX) * .05;
       const depth = direction * .95;
@@ -996,6 +1103,7 @@
       context.uniformMatrix4fv(loc.viewProjection, false, viewProjection);
 
       drawRink();
+      drawStands();
       const seconds = time / 1000;
       if (window.skinnedReferees) {
         window.skinnedReferees.sync({ eye, target, up }, {
