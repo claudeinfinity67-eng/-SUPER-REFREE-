@@ -41,7 +41,7 @@
   const stored = readStore();
   const state = {
     players: [],
-    puck: { x: 700, y: 360, vx: 0, vy: 0, carrier: null, lastTouch: null, fromX: 700, fromY: 360, shot: false },
+    puck: { x: 700, y: 360, vx: 0, vy: 0, carrier: null, passTarget: null, lastTouch: null, fromX: 700, fromY: 360, shot: false },
     refs: [],
     userRef: null,
     camera: { x: 700, y: 360, yaw: Math.PI / 2, distanceOffset: 0 },
@@ -162,13 +162,13 @@
     state.camera.yaw = state.userRef.yaw;
     state.camera.x = state.userRef.x;
     state.camera.y = state.userRef.y;
-    state.puck = { x: 700, y: 360, vx: 0, vy: 0, carrier: null, lastTouch: null, fromX: 700, fromY: 360, shot: false };
+    state.puck = { x: 700, y: 360, vx: 0, vy: 0, carrier: null, passTarget: null, lastTouch: null, fromX: 700, fromY: 360, shot: false };
     giveFaceoff(700, 360);
   }
 
   function giveFaceoff(x, y) {
     state.puck.x = x; state.puck.y = y; state.puck.vx = 0; state.puck.vy = 0;
-    state.puck.carrier = null; state.puck.shot = false; state.puck.fromX = x; state.puck.fromY = y;
+    state.puck.carrier = null; state.puck.passTarget = null; state.puck.shot = false; state.puck.fromX = x; state.puck.fromY = y;
     const nearest = state.players.filter(p => p.role === "skater").sort((a, b) => Math.abs(a.x - x) + Math.abs(a.y - y) - (Math.abs(b.x - x) + Math.abs(b.y - y)));
     if (nearest.length >= 2) {
       nearest[0].x = x - 24; nearest[0].y = y;
@@ -223,9 +223,49 @@
     player.y = clamp(player.y, RINK.top + 18, RINK.bottom - 18);
   }
 
+  function activeSkaters(team) {
+    return state.players.filter(p => p.team === team && p.role === "skater"
+      && !(state.penalty && p.team === state.penalty.team && p.number === 5));
+  }
+
+  function closestSkater(team, target) {
+    return activeSkaters(team).sort((a, b) => distance(a, target) - distance(b, target))[0] || null;
+  }
+
+  function distanceToSegment(point, start, end) {
+    const dx = end.x - start.x, dy = end.y - start.y;
+    const lengthSquared = dx * dx + dy * dy;
+    const t = lengthSquared ? clamp(((point.x - start.x) * dx + (point.y - start.y) * dy) / lengthSquared, 0, 1) : 0;
+    return Math.hypot(point.x - (start.x + dx * t), point.y - (start.y + dy * t));
+  }
+
+  function findOpenPassTarget(player) {
+    const dir = attackDir(player.team);
+    const defenders = activeSkaters(1 - player.team);
+    return activeSkaters(player.team)
+      .filter(mate => mate !== player && distance(player, mate) > 65 && distance(player, mate) < 390
+        && (mate.x - player.x) * dir > -45)
+      .map(mate => {
+        const lanePressure = defenders.reduce((pressure, defender) =>
+          Math.min(pressure, distanceToSegment(defender, player, mate)), Infinity);
+        const receiverPressure = defenders.reduce((pressure, defender) =>
+          Math.min(pressure, distance(defender, mate)), Infinity);
+        const forwardGain = (mate.x - player.x) * dir;
+        const score = Math.min(receiverPressure, 120) * 0.8
+          + Math.min(lanePressure, 100) * 0.65
+          + forwardGain * 0.35
+          - distance(player, mate) * 0.22;
+        return { mate, score, lanePressure };
+      })
+      .filter(candidate => candidate.lanePressure > 18)
+      .sort((a, b) => b.score - a.score)[0]?.mate || null;
+  }
+
   function playerAI(dt, now) {
     const puck = state.puck;
-    const carrier = puck.carrier;
+    const eligible = state.players.filter(p => p.role === "skater"
+      && !(state.penalty && p.team === state.penalty.team && p.number === 5));
+    const loosePuckChasers = [0, 1].map(team => closestSkater(team, puck));
     state.players.forEach(p => {
       p.previousX = p.x;
       p.checkCooldown = Math.max(0, p.checkCooldown - dt);
@@ -240,73 +280,84 @@
         return;
       }
       let tx, ty;
+      const carrier = puck.carrier;
       if (!carrier) {
-        if (p === state.players.filter(s => s.role === "skater").sort((a, b) => distance(a, puck) - distance(b, puck))[0]) {
+        if (p === loosePuckChasers[p.team]) {
           tx = puck.x; ty = puck.y;
+        } else if (puck.passTarget === p) {
+          tx = clamp(puck.x + puck.vx * 0.22, RINK.left + 30, RINK.right - 30);
+          ty = clamp(puck.y + puck.vy * 0.22, RINK.top + 30, RINK.bottom - 30);
         } else {
-          const slot = p.number % 4;
-          tx = clamp(puck.x - dir * (55 + slot * 26), RINK.left + 45, RINK.right - 45);
-          ty = clamp(puck.y + (slot % 2 ? 1 : -1) * (48 + slot * 15), RINK.top + 50, RINK.bottom - 50);
+          const slot = p.number - 1;
+          tx = clamp(puck.x - dir * (65 + slot * 24), RINK.left + 45, RINK.right - 45);
+          ty = clamp(puck.y + (slot % 2 ? 1 : -1) * (72 + Math.floor(slot / 2) * 32), RINK.top + 42, RINK.bottom - 42);
         }
       } else if (carrier === p) {
         const goalX = opponentGoalX(p.team);
         const distToGoal = Math.abs(goalX - p.x);
-        const pressured = state.players.some(opponent => opponent.team !== p.team && opponent.role === "skater" && distance(opponent, p) < 75);
+        const nearestDefender = closestSkater(1 - p.team, p);
+        const pressured = nearestDefender && distance(nearestDefender, p) < 82;
         const inOwnHalf = (p.x - WORLD.centerX) * dir < 0;
-        if (inOwnHalf && pressured && now > p.nextMove && Math.random() < .08) {
-          clearPuck(p);
-          p.nextMove = now + random(3, 5);
-        }
-        if (distToGoal < 340 && now > p.nextMove) {
-          p.nextMove = now + random(2.2, 4.1);
-          if (Math.random() < .72) shoot(p, false);
-          else pass(p);
+        if (now > p.nextMove) {
+          const passTarget = findOpenPassTarget(p);
+          const inScoringRange = distToGoal < 350 && Math.abs(p.y - WORLD.centerY) < 185;
+          let released = false;
+          if (passTarget && ((pressured && Math.random() < 0.76) || (!inScoringRange && Math.random() < 0.12))) {
+            released = pass(p, passTarget, now);
+          } else if (inScoringRange && (!pressured || distToGoal < 210) && Math.random() < 0.42) {
+            shoot(p, false);
+            released = true;
+          } else if (inOwnHalf && pressured && passTarget) {
+            released = pass(p, passTarget, now);
+          }
+          if (!released) p.nextMove = now + random(0.45, 0.8);
         }
         tx = clamp(p.x + dir * 155, RINK.left + 35, RINK.right - 35);
         ty = clamp(p.y + (WORLD.centerY - p.y) * .35, RINK.top + 48, RINK.bottom - 48);
       } else if (p.team === carrier.team) {
-        const slot = p.number % 4;
-        tx = clamp(carrier.x - dir * (45 + slot * 28), RINK.left + 40, RINK.right - 40);
-        ty = clamp(carrier.y + (slot % 2 ? 1 : -1) * (56 + slot * 13), RINK.top + 42, RINK.bottom - 42);
+        const slot = p.number - 1;
+        const supportAhead = slot < 3;
+        tx = clamp(carrier.x + dir * (supportAhead ? 76 + slot * 26 : -52), RINK.left + 40, RINK.right - 40);
+        ty = clamp(carrier.y + (slot % 2 ? 1 : -1) * (82 + Math.floor(slot / 2) * 28), RINK.top + 42, RINK.bottom - 42);
       } else {
-        const goalX = opponentGoalX(p.team);
-        if (distance(p, carrier) < 190 && p.number % 3 === 1) {
+        const primaryDefender = closestSkater(p.team, carrier);
+        if (p === primaryDefender && distance(p, carrier) < 220) {
           tx = carrier.x; ty = carrier.y;
           if (distance(p, carrier) < 24 && p.checkCooldown === 0 && Math.random() < .005) {
             p.checkCooldown = 4;
-                    raiseIncident("penalty", "Charge par derrière", "Contact irrégulier détecté dans le jeu.", p.team);
+            raiseIncident("penalty", "Charge par derrière", "Contact irrégulier détecté dans le jeu.", p.team);
           }
         } else {
-          tx = clamp((carrier.x + goalX) * .5, RINK.left + 50, RINK.right - 50);
-          ty = clamp(carrier.y + (p.number % 2 ? 75 : -75), RINK.top + 35, RINK.bottom - 35);
+          const slot = p.number - 1;
+          tx = clamp(carrier.x + dir * (48 + slot * 18), RINK.left + 50, RINK.right - 50);
+          ty = clamp(carrier.y + (slot % 2 ? 1 : -1) * (58 + Math.floor(slot / 2) * 34), RINK.top + 35, RINK.bottom - 35);
         }
       }
       movePlayerToward(p, tx, ty, dt);
     });
 
-    if (!carrier && Math.hypot(puck.vx, puck.vy) < 90) {
-      const nearest = state.players.filter(p => p.role === "skater" && !(state.penalty && p.team === state.penalty.team && p.number === 5)).sort((a, b) => distance(a, puck) - distance(b, puck))[0];
-      if (nearest && distance(nearest, puck) < 19) {
-        puck.carrier = nearest;
-        puck.lastTouch = nearest.team;
+    const currentCarrier = puck.carrier;
+    if (currentCarrier && currentCarrier.role === "skater") {
+      puck.x = currentCarrier.x + attackDir(currentCarrier.team) * 13;
+      puck.y = currentCarrier.y + 5;
+      checkRinkEvents();
+    }
+
+    if (!puck.carrier) {
+      const puckSpeed = Math.hypot(puck.vx, puck.vy);
+      const nearbySkaters = eligible
+        .filter(player => distance(player, puck) < player.radius + 10)
+        .sort((a, b) => distance(a, puck) - distance(b, puck));
+      const receiver = nearbySkaters.includes(puck.passTarget)
+        ? puck.passTarget
+        : nearbySkaters[0];
+      if (receiver && (puck.passTarget || puckSpeed < 90)) {
+        puck.carrier = receiver;
+        puck.passTarget = null;
+        puck.lastTouch = receiver.team;
         puck.vx = 0; puck.vy = 0;
         puck.shot = false;
       }
-    }
-
-    if (carrier && carrier.role === "skater") {
-      puck.x = carrier.x + attackDir(carrier.team) * 13;
-      puck.y = carrier.y + 5;
-      if (Math.random() < dt * .34 && carrier.nextMove < now) {
-        const defenders = state.players.filter(p => p.team !== carrier.team && p.role === "skater");
-        const closeDefender = defenders.some(p => distance(p, carrier) < 46);
-        if (closeDefender) {
-          const teammates = state.players.filter(p => p.team === carrier.team && p.role === "skater" && p !== carrier);
-          const mate = teammates.sort((a, b) => distance(a, carrier) - distance(b, carrier))[0];
-          if (mate && Math.random() < .68) pass(carrier);
-        }
-      }
-      checkRinkEvents();
     }
 
     if (puck.vx || puck.vy) {
@@ -327,18 +378,22 @@
     movePlayerToward(assist, assist.target.x, assist.target.y, dt, assist.speed);
   }
 
-  function pass(player) {
-    const mates = state.players.filter(p => p.team === player.team && p.role === "skater" && p !== player);
-    if (!mates.length) return;
-    const target = mates.sort((a, b) => distance(a, player) - distance(b, player))[0];
-    const dx = target.x - player.x, dy = target.y - player.y, len = Math.hypot(dx, dy) || 1;
+  function pass(player, target = findOpenPassTarget(player), now = performance.now() / 1000) {
+    if (!target) return false;
+    const leadTime = clamp(distance(player, target) / 360, 0.18, 0.55);
+    const targetX = clamp(target.x + target.vx * leadTime, RINK.left + 25, RINK.right - 25);
+    const targetY = clamp(target.y + target.vy * leadTime, RINK.top + 25, RINK.bottom - 25);
+    const dx = targetX - player.x, dy = targetY - player.y, len = Math.hypot(dx, dy) || 1;
+    const passSpeed = clamp(len * 0.8, 75, 320);
     state.puck.carrier = null;
+    state.puck.passTarget = target;
     state.puck.lastTouch = player.team;
-    state.puck.vx = dx / len * 325;
-    state.puck.vy = dy / len * 325;
+    state.puck.vx = dx / len * passSpeed;
+    state.puck.vy = dy / len * passSpeed;
     state.puck.fromX = player.x; state.puck.fromY = player.y;
     state.puck.shot = false;
-    player.nextMove = performance.now() / 1000 + 1;
+    player.nextMove = now + random(1.5, 2.4);
+    return true;
   }
 
   function shoot(player, userShot) {
@@ -347,23 +402,13 @@
     const targetY = goalie ? goalie.y + random(-39, 39) : WORLD.centerY;
     const dx = targetX - player.x, dy = targetY - player.y, len = Math.hypot(dx, dy) || 1;
     state.puck.carrier = null;
+    state.puck.passTarget = null;
     state.puck.lastTouch = player.team;
     state.puck.vx = dx / len * (userShot ? 530 : 425);
     state.puck.vy = dy / len * (userShot ? 530 : 425);
     state.puck.fromX = player.x; state.puck.fromY = player.y;
     state.puck.shot = true;
     player.nextMove = performance.now() / 1000 + random(1.6, 3.2);
-  }
-
-  function clearPuck(player) {
-    const dir = attackDir(player.team);
-    state.puck.carrier = null;
-    state.puck.lastTouch = player.team;
-    state.puck.vx = dir * 475;
-    state.puck.vy = clamp((WORLD.centerY - player.y) * 1.1, -115, 115);
-    state.puck.fromX = player.x;
-    state.puck.fromY = player.y;
-    state.puck.shot = true;
   }
 
   function checkRinkEvents() {
