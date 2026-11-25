@@ -257,14 +257,14 @@ function syncRef(index, entity, delta) {
     object.rotation.y = targetYaw;
     object.userData.hasSynced = true;
   } else {
-    const positionAlpha = 1 - Math.exp(-18 * delta);
+    const positionAlpha = 1 - Math.exp(-26 * delta);
     object.position.x += (targetX - object.position.x) * positionAlpha;
     object.position.z += (targetZ - object.position.z) * positionAlpha;
     const yawDelta = Math.atan2(
       Math.sin(targetYaw - object.rotation.y),
       Math.cos(targetYaw - object.rotation.y),
     );
-    object.rotation.y += yawDelta * (1 - Math.exp(-20 * delta));
+    object.rotation.y += yawDelta * (1 - Math.exp(-26 * delta));
   }
   object.visible = true;
 
@@ -426,14 +426,14 @@ function syncPlayer(entity, delta) {
     object.rotation.y = targetYaw;
     object.userData.hasSynced = true;
   } else {
-    const positionAlpha = 1 - Math.exp(-24 * delta);
+    const positionAlpha = 1 - Math.exp(-30 * delta);
     object.position.x += (targetX - object.position.x) * positionAlpha;
     object.position.z += (targetZ - object.position.z) * positionAlpha;
     const yawDelta = Math.atan2(
       Math.sin(targetYaw - object.rotation.y),
       Math.cos(targetYaw - object.rotation.y),
     );
-    object.rotation.y += yawDelta * (1 - Math.exp(-24 * delta));
+    object.rotation.y += yawDelta * (1 - Math.exp(-30 * delta));
   }
   object.visible = true;
 
