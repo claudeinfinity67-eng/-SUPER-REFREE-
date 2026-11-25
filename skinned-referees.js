@@ -23,13 +23,29 @@ let template = null;
 let clip = null;
 let loaded = false;
 let playerTemplate = null;
-let playerClip = null;
 let playerMaterials = [];
 let playersLoaded = false;
 const refereeHeight = 1.6;
 const playerHeight = 1.72;
-const playerModelYawOffset = -Math.PI / 2;
+const playerModelYawOffset = 0;
 const animationFadeSpeed = 12;
+const playerBoneNames = {
+  hips: "mixamorigHips",
+  spine: "mixamorigSpine",
+  chest: "mixamorigSpine2",
+  leftThigh: "mixamorigLeftUpLeg",
+  leftShin: "mixamorigLeftLeg",
+  leftFoot: "mixamorigLeftFoot",
+  rightThigh: "mixamorigRightUpLeg",
+  rightShin: "mixamorigRightLeg",
+  rightFoot: "mixamorigRightFoot",
+  leftArm: "mixamorigLeftArm",
+  leftForearm: "mixamorigLeftForeArm",
+  rightArm: "mixamorigRightArm",
+  rightForearm: "mixamorigRightForeArm",
+};
+const poseEuler = new THREE.Euler();
+const poseQuaternion = new THREE.Quaternion();
 
 const shadowCanvas = document.createElement("canvas");
 shadowCanvas.width = 64;
@@ -193,15 +209,6 @@ async function loadPlayerModel() {
     });
 
     playerTemplate = object;
-    playerClip = object.animations.find((item) => item.duration > 0)?.clone() || null;
-    if (playerClip) {
-      const rootTracks = new Set([
-        "mixamorigHips.position",
-        "SmartRigArmature.position",
-        "SmartRigArmature.scale",
-      ]);
-      playerClip.tracks = playerClip.tracks.filter((track) => !rootTracks.has(track.name));
-    }
     playersLoaded = true;
     window.skinnedReferees.playersReady = true;
   } catch (error) {
@@ -279,33 +286,122 @@ function syncRef(index, entity, delta) {
 
 function makePlayer(entity) {
   const object = cloneSkinnedObject(playerTemplate);
-  const mixer = playerClip ? new THREE.AnimationMixer(object) : null;
-  const action = mixer ? mixer.clipAction(playerClip) : null;
   const playerIndex = (entity.team || 0) * 6 + (entity.number || 1) - 1;
-  if (action) {
-    action.reset();
-    action.time = playerClip.duration * ((playerIndex % 12) / 12);
-    action.setEffectiveTimeScale(1);
-    action.setEffectiveWeight(0);
-    action.play();
-    action.paused = true;
-  }
   object.traverse((child) => {
     if (child.isMesh) child.material = playerMaterials[entity.team === 0 ? 0 : 1];
   });
-  object.userData.mixer = mixer;
-  object.userData.action = action;
+  object.userData.playerBones = Object.fromEntries(
+    Object.entries(playerBoneNames)
+      .map(([key, name]) => [key, object.getObjectByName(name)])
+      .filter(([, bone]) => bone)
+      .map(([key, bone]) => [key, { bone, restQuaternion: bone.quaternion.clone() }]),
+  );
   object.userData.animationWeight = 0;
+  object.userData.animationPhase = ((playerIndex % 12) / 12) * Math.PI * 2;
   object.userData.animationSpeedFactor = 0.93 + (playerIndex % 5) * 0.035;
   object.userData.lastMovementYaw = null;
   const shadow = new THREE.Mesh(shadowGeometry, shadowMaterial);
   shadow.rotation.x = -Math.PI / 2;
   shadow.position.y = -0.014;
   shadow.scale.set(0.82, 0.5, 1);
-  object.add(shadow);
+  scene.add(shadow);
+  object.userData.shadow = shadow;
   scene.add(object);
   playerRefs.set(entity, object);
   return object;
+}
+
+function setPlayerBoneRotation(object, key, x, y, z) {
+  const poseBone = object.userData.playerBones[key];
+  if (!poseBone) return;
+  poseEuler.set(x, y, z);
+  poseQuaternion.setFromEuler(poseEuler);
+  poseBone.bone.quaternion.copy(poseBone.restQuaternion).multiply(poseQuaternion);
+}
+
+function animatePlayer(object, delta, speed, topSpeed, turnRate) {
+  const moving = speed > 3;
+  const turnIntensity = Math.min(1, Math.max(0, (Math.abs(turnRate) - 0.35) / 1.8));
+  const sprintIntensity = Math.min(1, Math.max(0, (speed / topSpeed - 0.72) / 0.28));
+  const targetWeight = moving
+    ? Math.min(1, 0.62 + turnIntensity * 0.2 + sprintIntensity * 0.18)
+    : 0;
+  const blend = 1 - Math.exp(-animationFadeSpeed * delta);
+  const weight = object.userData.animationWeight
+    + (targetWeight - object.userData.animationWeight) * blend;
+  object.userData.animationWeight = weight;
+
+  if (!moving && weight < 0.01) {
+    object.userData.animationWeight = 0;
+    object.userData.shadow.position.y = -0.014;
+    object.position.y = 0;
+    for (const { bone, restQuaternion } of Object.values(object.userData.playerBones)) {
+      bone.quaternion.copy(restQuaternion);
+    }
+    return;
+  }
+
+  const speedRatio = Math.min(1, speed / topSpeed);
+  const phase = object.userData.animationPhase;
+  const leftStride = Math.sin(phase);
+  const rightStride = Math.sin(phase + Math.PI);
+  const leftPush = Math.max(0, Math.cos(phase));
+  const rightPush = Math.max(0, Math.cos(phase + Math.PI));
+  const leftRecovery = Math.max(0, -leftStride);
+  const rightRecovery = Math.max(0, -rightStride);
+  const stride = weight * (0.9 + sprintIntensity * 0.25);
+  const turnLean = Math.max(-1, Math.min(1, turnRate * 0.16)) * weight;
+  const crouch = (0.09 + sprintIntensity * 0.13) * weight;
+
+  setPlayerBoneRotation(object, "hips", turnLean * 0.42, Math.sin(phase) * 0.035 * stride, -crouch);
+  setPlayerBoneRotation(object, "spine", -turnLean * 0.2, -Math.sin(phase) * 0.025 * stride, crouch * 0.38);
+  setPlayerBoneRotation(object, "chest", -turnLean * 0.3, Math.sin(phase) * 0.04 * stride, crouch * 0.2);
+  setPlayerBoneRotation(
+    object, "leftThigh",
+    leftPush * 0.24 * stride,
+    0,
+    -leftStride * 0.34 * stride,
+  );
+  setPlayerBoneRotation(
+    object, "leftShin",
+    0,
+    0,
+    leftRecovery * 0.62 * stride,
+  );
+  setPlayerBoneRotation(
+    object, "leftFoot",
+    -leftRecovery * 0.1 * stride,
+    0,
+    leftStride * 0.2 * stride - leftRecovery * 0.16 * stride,
+  );
+  setPlayerBoneRotation(
+    object, "rightThigh",
+    -rightPush * 0.24 * stride,
+    0,
+    -rightStride * 0.34 * stride,
+  );
+  setPlayerBoneRotation(
+    object, "rightShin",
+    0,
+    0,
+    rightRecovery * 0.62 * stride,
+  );
+  setPlayerBoneRotation(
+    object, "rightFoot",
+    rightRecovery * 0.1 * stride,
+    0,
+    rightStride * 0.2 * stride - rightRecovery * 0.16 * stride,
+  );
+  setPlayerBoneRotation(object, "leftArm", -rightStride * 0.15 * stride, 0, rightStride * 0.16 * stride);
+  setPlayerBoneRotation(object, "leftForearm", 0, 0, 0.1 * stride + leftPush * 0.09 * stride);
+  setPlayerBoneRotation(object, "rightArm", -leftStride * 0.15 * stride, 0, leftStride * 0.16 * stride);
+  setPlayerBoneRotation(object, "rightForearm", 0, 0, 0.1 * stride + rightPush * 0.09 * stride);
+
+  object.position.y = Math.abs(Math.sin(phase * 2)) * 0.018 * weight;
+  object.userData.shadow.position.y = -0.014;
+  object.userData.animationPhase = (
+    phase + delta * (2.2 + speedRatio * 3.2) * object.userData.animationSpeedFactor
+  ) % (Math.PI * 2);
 }
 
 function syncPlayer(entity, delta) {
@@ -319,10 +415,10 @@ function syncPlayer(entity, delta) {
   const targetYaw = movementYaw + playerModelYawOffset;
   const previousMovementYaw = object.userData.lastMovementYaw;
   const turnRate = speed > 3 && previousMovementYaw !== null && delta > 0
-    ? Math.abs(Math.atan2(
+    ? Math.atan2(
       Math.sin(movementYaw - previousMovementYaw),
       Math.cos(movementYaw - previousMovementYaw),
-    )) / delta
+    ) / delta
     : 0;
   object.userData.lastMovementYaw = speed > 3 ? movementYaw : null;
   if (!object.userData.hasSynced) {
@@ -341,25 +437,8 @@ function syncPlayer(entity, delta) {
   }
   object.visible = true;
 
-  const action = object.userData.action;
-  if (action) {
-    const moving = speed > 3;
-    const turnIntensity = Math.min(1, Math.max(0, (turnRate - 0.35) / 1.8));
-    const topSpeed = entity.speed || 120;
-    const sprintIntensity = Math.min(1, Math.max(0, (speed / topSpeed - 0.72) / 0.28));
-    const targetWeight = moving
-      ? Math.min(0.95, 0.35 + turnIntensity * 0.28 + sprintIntensity * 0.32)
-      : 0;
-    const blend = 1 - Math.exp(-animationFadeSpeed * delta);
-    const weight = object.userData.animationWeight
-      + (targetWeight - object.userData.animationWeight) * blend;
-    object.userData.animationWeight = weight;
-    action.setEffectiveWeight(weight);
-    action.setEffectiveTimeScale(
-      (0.65 + Math.min(1, speed / 120) * 0.35) * object.userData.animationSpeedFactor,
-    );
-    action.paused = !moving && weight < 0.01;
-  }
+  object.userData.shadow.position.set(object.position.x, -0.014, object.position.z);
+  animatePlayer(object, delta, speed, entity.speed || 120, turnRate);
 }
 
 window.skinnedReferees = {
@@ -378,12 +457,11 @@ window.skinnedReferees = {
       const activePlayers = new Set(entities.players);
       for (const [entity, object] of playerRefs) {
         if (activePlayers.has(entity)) continue;
-        object.userData.mixer?.stopAllAction();
         scene.remove(object);
+        scene.remove(object.userData.shadow);
         playerRefs.delete(entity);
       }
       entities.players.forEach((entity) => syncPlayer(entity, delta));
-      playerRefs.forEach((object) => object.userData.mixer?.update(delta));
     }
     refs.forEach((object) => object?.userData.mixer?.update(delta));
     renderer.render(scene, camera);
