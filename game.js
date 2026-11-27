@@ -850,9 +850,9 @@
         const position = world(x, z, y);
         for (const index of boxGeometry.indices) {
           const offset = index * 6;
-          const localX = boxGeometry.vertices[offset] * sx;
+          const localX = boxGeometry.vertices[offset] * sx * 0.05;
           const localY = boxGeometry.vertices[offset + 1] * sy;
-          const localZ = boxGeometry.vertices[offset + 2] * sz;
+          const localZ = boxGeometry.vertices[offset + 2] * sz * 0.05;
           const normalX = boxGeometry.vertices[offset + 3];
           const normalY = boxGeometry.vertices[offset + 4];
           const normalZ = boxGeometry.vertices[offset + 5];
@@ -869,67 +869,201 @@
       const colors = {
         home: [0.78, 0.13, 0.19],
         away: [0.08, 0.34, 0.67],
-        dark: [0.11, 0.14, 0.2],
-        light: [0.79, 0.83, 0.84],
-        skin: [0.72, 0.48, 0.34],
-        deck: [0.24, 0.29, 0.34],
-        glass: [0.53, 0.72, 0.78],
+        dark: [0.075, 0.095, 0.14],
+        structure: [0.2, 0.24, 0.3],
+        concrete: [0.38, 0.41, 0.43],
+        skin: [0.65, 0.44, 0.32],
+        glass: [0.3, 0.48, 0.55],
+        rail: [0.72, 0.78, 0.78],
+        roof: [0.12, 0.15, 0.2],
       };
-      const addLongStands = (side) => {
-        const edge = side < 0 ? RINK.top : RINK.bottom;
-        const sideIndex = side < 0 ? 0 : 1;
-        const midpoint = (RINK.left + RINK.right) / 2;
-        for (let tier = 0; tier < 3; tier++) {
-          const z = edge + side * (0.9 + tier * 0.78);
-          const platformY = 0.42 + tier * 0.46;
-          addBox(midpoint, platformY, z, RINK.right - RINK.left + 14, 0.14, 0.88, colors.deck);
-          for (let x = RINK.left + 18, seat = 0; x < RINK.right - 18; x += 1.12, seat++) {
-            const homeSide = x < midpoint;
-            const jersey = (seat + tier * 3 + sideIndex) % 5 === 0
-              ? colors.dark
-              : homeSide ? colors.home : colors.away;
-            const seatZ = z + side * 0.05;
-            const bodyY = platformY + 0.34;
-            addBox(x, bodyY, seatZ, 0.3, 0.34, 0.26, jersey);
-            addBox(x, bodyY + 0.25, seatZ, 0.19, 0.19, 0.19,
-              (seat + tier + sideIndex) % 3 === 0 ? colors.skin : colors.dark);
+      const lowerRows = 6;
+      const upperRows = 7;
+      const rowPitch = 19;
+      const lowerStart = 20;
+      const concourseOffset = lowerStart + lowerRows * rowPitch + 28;
+      const upperStart = concourseOffset + 38;
+      const addSpectator = (x, y, z, color, facingYaw = 0, scale = 1) => {
+        addBox(x, y, z, 13 * scale, 0.43 * scale, 9 * scale, color, facingYaw);
+        addBox(x, y + 0.28 * scale, z, 8 * scale, 0.22 * scale, 8 * scale, colors.skin, facingYaw);
+      };
+      const addAisleSteps = (outward, edge, centerAlong, horizontal) => {
+        const aisleWidth = 28;
+        for (let row = 0; row < lowerRows + upperRows; row++) {
+          const upper = row >= lowerRows;
+          const rowInTier = upper ? row - lowerRows : row;
+          const offset = upper
+            ? upperStart + rowInTier * rowPitch
+            : lowerStart + row * rowPitch;
+          const baseY = upper ? 3.05 + rowInTier * 0.3 : 0.18 + row * 0.3;
+          if (horizontal) {
+            addBox(centerAlong, baseY + 0.07, edge + outward * offset, aisleWidth, 0.14, rowPitch * 0.8, colors.concrete);
+          } else {
+            addBox(edge + outward * offset, baseY + 0.07, centerAlong, rowPitch * 0.8, 0.14, aisleWidth, colors.concrete);
           }
         }
-        const outerZ = edge + side * 3.25;
-        addBox(midpoint, 1.72, outerZ, RINK.right - RINK.left + 22, 3.1, 0.22, colors.dark);
-        addBox(midpoint, 2.65, edge + side * 0.58, RINK.right - RINK.left + 10, 0.07, 0.08, colors.glass);
-        for (let section = 0; section < 12; section++) {
-          const x = RINK.left + 25 + section * ((RINK.right - RINK.left - 50) / 11);
-          addBox(x, 2.72, edge + side * 2.72, 2.4, 0.32, 0.08,
-            section % 2 === 0 ? colors.home : colors.away);
+      };
+      const addLongStands = side => {
+        const edge = side < 0 ? RINK.top : RINK.bottom;
+        const outward = side < 0 ? -1 : 1;
+        const sideIndex = side < 0 ? 0 : 1;
+        const startX = RINK.left;
+        const endX = RINK.right;
+        const midpoint = (startX + endX) / 2;
+        const standWidth = endX - startX;
+        const aisleSeats = [startX + 250, midpoint, endX - 250];
+        const addTier = (rowCount, firstOffset, baseHeight, tierIndex) => {
+          for (let row = 0; row < rowCount; row++) {
+            const offset = firstOffset + row * rowPitch;
+            const platformY = baseHeight + row * 0.3;
+            const rowZ = edge + outward * offset;
+            const facingYaw = outward < 0 ? 0 : Math.PI;
+
+            addBox(midpoint, platformY, rowZ + outward * 5, standWidth, 0.18, rowPitch * 0.9, colors.concrete);
+
+            for (let x = startX, seat = 0; x <= endX; x += 24, seat++) {
+              const inAisle = aisleSeats.some(aisle => Math.abs(x - aisle) < 22);
+              if (inAisle) continue;
+
+              const seatZ = rowZ - outward * 5;
+              const homeSection = x < midpoint;
+              const jersey = (seat + row * 3 + tierIndex + sideIndex) % 7 === 0
+                ? colors.dark
+                : homeSection ? colors.home : colors.away;
+              const seatColor = homeSection ? colors.home : colors.away;
+
+              addBox(x, platformY + 0.17, seatZ, 18, 0.12, 13, seatColor);
+              addBox(x, platformY + 0.35, seatZ + outward * 7, 18, 0.3, 4, seatColor, facingYaw);
+              addSpectator(x, platformY + 0.47, seatZ + outward * 2, jersey, facingYaw);
+            }
+          }
+          for (const aisle of aisleSeats) addAisleSteps(outward, edge, aisle, true);
+        };
+
+        addTier(lowerRows, lowerStart, 0.18, 0);
+
+        const concourseZ = edge + outward * concourseOffset;
+        addBox(midpoint, 2.25, concourseZ, standWidth, 0.28, 35, colors.structure);
+        addBox(midpoint, 2.48, concourseZ - outward * 14, standWidth, 0.08, 22, colors.glass);
+        for (let section = 0; section <= 12; section++) {
+          const x = startX + section * (standWidth / 12);
+          addBox(x, 2.4, concourseZ - outward * 15, 3, 0.82, 2, colors.dark);
+          addBox(x, 2.42, concourseZ - outward * 16.2, 2.5, 0.48, 1, section % 2 ? colors.home : colors.away);
+        }
+        addBox(midpoint, 2.85, concourseZ + outward * 14, standWidth, 0.07, 0.07, colors.rail);
+        addBox(midpoint, 2.5, concourseZ + outward * 14, 0.08, 0.66, 0.08, colors.rail);
+
+        addTier(upperRows, upperStart, 3.05, 1);
+
+        const roofDepth = (upperRows - 1) * rowPitch + 55;
+        const roofOffset = upperStart + (upperRows - 1) * rowPitch * 0.5;
+        const roofZ = edge + outward * roofOffset;
+        addBox(midpoint, 6.5, roofZ, standWidth + 55, 0.5, roofDepth, colors.roof);
+        for (let beamIndex = 0; beamIndex <= 8; beamIndex++) {
+          const x = startX - 20 + beamIndex * ((standWidth + 40) / 8);
+          addBox(x, 6.2, roofZ, 5, 0.65, roofDepth, colors.structure);
+        }
+        addBox(midpoint, 2.45, concourseZ - outward * 18, standWidth, 1.35, 10, colors.structure);
+        for (let section = 0; section < 16; section++) {
+          const x = startX + section * (standWidth / 15);
+          addBox(x, 2.5, concourseZ - outward * 18.9, 25, 0.72, 2.5, section % 2 ? colors.dark : colors.glass);
         }
       };
-      const addEndStands = (side) => {
+      const addEndStands = side => {
         const edge = side < 0 ? RINK.left : RINK.right;
         const outward = side < 0 ? -1 : 1;
-        for (let tier = 0; tier < 3; tier++) {
-          const x = edge + outward * (0.9 + tier * 0.78);
-          const platformY = 0.42 + tier * 0.46;
-          addBox(x, platformY, WORLD.centerY, 0.88, 0.14, RINK.bottom - RINK.top - 14,
-            colors.deck, Math.PI / 2);
-          for (let z = RINK.top + 18, seat = 0; z < RINK.bottom - 18; z += 1.12, seat++) {
-            const homeSide = (z < WORLD.centerY) === (side < 0);
-            const jersey = (seat + tier + side) % 5 === 0
-              ? colors.dark
-              : homeSide ? colors.home : colors.away;
-            const bodyY = platformY + 0.34;
-            addBox(x, bodyY, z, 0.3, 0.34, 0.26, jersey, Math.PI / 2);
-            addBox(x, bodyY + 0.25, z, 0.19, 0.19, 0.19,
-              (seat + tier) % 3 === 0 ? colors.skin : colors.dark, Math.PI / 2);
+        const startZ = RINK.top;
+        const endZ = RINK.bottom;
+        const midpoint = (startZ + endZ) / 2;
+        const standLength = endZ - startZ;
+        const aisleSeats = [startZ + 115, midpoint, endZ - 115];
+        const addEndTier = (rowCount, firstOffset, baseHeight, tierIndex) => {
+          for (let row = 0; row < rowCount; row++) {
+            const offset = firstOffset + row * rowPitch;
+            const platformY = baseHeight + row * 0.3;
+            const rowX = edge + outward * offset;
+            const facingYaw = outward < 0 ? Math.PI / 2 : -Math.PI / 2;
+
+            addBox(rowX + outward * 5, platformY, midpoint, rowPitch * 0.9, 0.18, standLength, colors.concrete);
+
+            for (let z = startZ, seat = 0; z <= endZ; z += 24, seat++) {
+              if (aisleSeats.some(aisle => Math.abs(z - aisle) < 18)) continue;
+              const seatX = rowX - outward * 5;
+              const homeSection = (z < midpoint) === (side < 0);
+              const jersey = (seat + row * 3 + tierIndex + side) % 7 === 0
+                ? colors.dark
+                : homeSection ? colors.home : colors.away;
+              const seatColor = homeSection ? colors.home : colors.away;
+
+              addBox(seatX, platformY + 0.17, z, 13, 0.12, 18, seatColor);
+              addBox(seatX + outward * 7, platformY + 0.35, z, 4, 0.3, 18, seatColor, facingYaw);
+              addSpectator(seatX + outward * 2, platformY + 0.47, z, jersey, facingYaw);
+            }
+          }
+          for (const aisle of aisleSeats) addAisleSteps(outward, edge, aisle, false);
+        };
+
+        addEndTier(lowerRows, lowerStart, 0.18, 0);
+        const concourseX = edge + outward * concourseOffset;
+        addBox(concourseX, 2.25, midpoint, 35, 0.28, standLength, colors.structure);
+        addBox(concourseX - outward * 14, 2.48, midpoint, 22, 0.08, standLength, colors.glass);
+        addBox(concourseX + outward * 14, 2.85, midpoint, 0.07, 0.07, standLength, colors.rail);
+        addEndTier(upperRows, upperStart, 3.05, 1);
+        const roofDepth = (upperRows - 1) * rowPitch + 55;
+        const roofX = edge + outward * (upperStart + (upperRows - 1) * rowPitch * 0.5);
+        addBox(roofX, 6.5, midpoint, roofDepth, 0.5, standLength + 55, colors.roof);
+        for (let beamIndex = 0; beamIndex <= 4; beamIndex++) {
+          const z = startZ - 20 + beamIndex * ((standLength + 40) / 4);
+          addBox(roofX, 6.2, z, roofDepth, 0.65, 5, colors.structure);
+        }
+      };
+      const addCornerStands = (xSide, zSide) => {
+        const cornerX = xSide < 0 ? RINK.left : RINK.right;
+        const cornerZ = zSide < 0 ? RINK.top : RINK.bottom;
+        const outwardX = xSide < 0 ? -1 : 1;
+        const outwardZ = zSide < 0 ? -1 : 1;
+        const firstAngle = 0.02;
+        const lastAngle = Math.PI / 2 - firstAngle;
+        const tiers = [
+          { rows: lowerRows, firstRadius: lowerStart, baseHeight: 0.18, tierIndex: 0 },
+          { rows: upperRows, firstRadius: upperStart, baseHeight: 3.05, tierIndex: 1 },
+        ];
+
+        for (const tier of tiers) {
+          for (let row = 0; row < tier.rows; row++) {
+            const radius = tier.firstRadius + row * rowPitch;
+            const platformY = tier.baseHeight + row * 0.3;
+            const seatCount = Math.max(1, Math.floor(radius * (lastAngle - firstAngle) / 24));
+
+            for (let seat = 0; seat < seatCount; seat++) {
+              const angle = firstAngle + (seat + 0.5) * (lastAngle - firstAngle) / seatCount;
+              const x = cornerX + outwardX * radius * Math.cos(angle);
+              const z = cornerZ + outwardZ * radius * Math.sin(angle);
+              const facingYaw = Math.atan2(-outwardX * Math.cos(angle), -outwardZ * Math.sin(angle));
+              const teamColor = (seat + row + xSide + zSide) % 2 === 0 ? colors.home : colors.away;
+              const jersey = (seat + row * 3 + tier.tierIndex) % 7 === 0 ? colors.dark : teamColor;
+
+              addBox(x, platformY, z, 22, 0.18, 18, colors.concrete, facingYaw);
+              addBox(x, platformY + 0.17, z, 18, 0.12, 13, teamColor, facingYaw);
+              addBox(x, platformY + 0.35, z, 18, 0.3, 4, teamColor, facingYaw);
+              addSpectator(x, platformY + 0.47, z, jersey, facingYaw);
+            }
           }
         }
-        addBox(edge + outward * 3.25, 1.72, WORLD.centerY, 0.22, 3.1,
-          RINK.bottom - RINK.top + 22, colors.dark);
+
+        const frameRadius = upperStart + (upperRows - 1) * rowPitch + 24;
+        const frameX = cornerX + outwardX * frameRadius * Math.SQRT1_2;
+        const frameZ = cornerZ + outwardZ * frameRadius * Math.SQRT1_2;
+        addBox(frameX, 2.45, frameZ, 34, 1.35, 10, colors.structure, Math.atan2(-outwardX, -outwardZ));
+        addBox(frameX, 6.2, frameZ, 48, 0.65, 12, colors.roof, Math.atan2(-outwardX, -outwardZ));
       };
       addLongStands(-1);
       addLongStands(1);
       addEndStands(-1);
       addEndStands(1);
+      for (const xSide of [-1, 1]) {
+        for (const zSide of [-1, 1]) addCornerStands(xSide, zSide);
+      }
       return [...batches].map(([key, vertices]) => ({
         mesh: uploadGeometry(context, { vertices: new Float32Array(vertices) }),
         color: key.split(",").map(Number),
